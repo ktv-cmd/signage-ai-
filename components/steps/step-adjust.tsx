@@ -60,7 +60,7 @@ export function StepAdjust() {
               className="w-full h-full object-cover"
             />
 
-            {/* Sign-only adjusted layer (limited to placement area) */}
+            {/* Full-image day/night filter layer */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={selectedCandidate.imageUrl}
@@ -69,7 +69,6 @@ export function StepAdjust() {
               className="absolute inset-0 w-full h-full object-cover pointer-events-none"
               style={{
                 filter: buildPreviewFilter(adjustments),
-                clipPath: buildPlacementClipPath(placement),
               }}
             />
 
@@ -93,13 +92,12 @@ export function StepAdjust() {
               }}
             />
 
-            {/* Sign-only night glow */}
+            {/* Full-image night glow */}
             {adjustments.timeOfDay === "night" && (
               <div
                 className="absolute inset-0 pointer-events-none"
                 style={{
-                  background: `radial-gradient(ellipse 60% 30% at 50% 25%, ${adjustments.lightColor}33 0%, transparent 70%)`,
-                  clipPath: buildPlacementClipPath(placement),
+                  background: `radial-gradient(ellipse 80% 50% at 50% 30%, ${adjustments.lightColor}22 0%, transparent 70%)`,
                 }}
               />
             )}

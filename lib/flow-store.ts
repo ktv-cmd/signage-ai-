@@ -23,6 +23,9 @@ interface FlowStore extends FlowState {
   // Step 3: Variations
   setVariationCount: (count: VariationCount) => void
 
+  // Model selector
+  setSelectedProvider: (provider: "fal" | "gemini" | "huggingface") => void
+
   // Step 4/5: Generation + Selection
   setGenerationResult: (result: GenerationResult) => void
   setSelectedCandidate: (id: string) => void
@@ -44,9 +47,20 @@ const DEFAULT_ADJUSTMENTS: AdjustmentSettings = {
   timeOfDay: "day",
 }
 
+const DEFAULT_PLACEMENT: Placement = {
+  centerX: 0.5,
+  centerY: 0.22,
+  width: 0.68,
+  height: 0.14,
+  rotation: 0,
+  facadeConfidence: 0.85,
+}
+
 const initialState: FlowState = {
   currentStep: "upload",
   selectedReferences: [],
+  variationCount: 1,
+  placement: DEFAULT_PLACEMENT,
 }
 
 export const useFlowStore = create<FlowStore>((set, get) => ({
@@ -58,6 +72,11 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     const { currentStep, variationCount } = get()
     const currentIndex = STEP_ORDER.indexOf(currentStep)
     let nextStep = STEP_ORDER[currentIndex + 1]
+
+    // Skip variations step only — placement is active.
+    if (currentStep === "placement") {
+      nextStep = "generate"
+    }
 
     // Skip "select" step if variationCount === 1
     if (nextStep === "select" && variationCount === 1) {
@@ -72,6 +91,11 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     const currentIndex = STEP_ORDER.indexOf(currentStep)
     let previousStep = STEP_ORDER[currentIndex - 1]
 
+    // Skip variations step only — placement is active.
+    if (currentStep === "generate") {
+      previousStep = "placement"
+    }
+
     // Skip hidden "select" step when variationCount is 1.
     if (previousStep === "select" && variationCount === 1) {
       previousStep = "generate"
@@ -84,10 +108,10 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     set({ storefrontFile: file, storefrontPreviewUrl: previewUrl }),
 
   setBrandAsset: (file, previewUrl) =>
-    set({ brandAssetFile: file, brandAssetPreviewUrl: previewUrl, brandText: undefined }),
+    set({ brandAssetFile: file, brandAssetPreviewUrl: previewUrl }),
 
   setBrandText: (text) =>
-    set({ brandText: text, brandAssetFile: undefined, brandAssetPreviewUrl: undefined }),
+    set({ brandText: text }),
 
   clearBrandAsset: () =>
     set({ brandAssetFile: undefined, brandAssetPreviewUrl: undefined }),
@@ -107,6 +131,8 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
   setPlacement: (placement) => set({ placement }),
 
   setVariationCount: (variationCount) => set({ variationCount }),
+
+  setSelectedProvider: (selectedProvider) => set({ selectedProvider }),
 
   setGenerationResult: (result) => {
     const { variationCount } = get()

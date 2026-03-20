@@ -18,6 +18,7 @@ export interface Placement {
   centerX: number   // normalized 0-1
   centerY: number   // normalized 0-1
   width: number     // normalized 0-1 (60-80% of facade)
+  height: number    // normalized 0-1
   rotation: number  // degrees, typically -10 to +10
   facadeConfidence: number // 0-1, from auto-detection
 }
@@ -79,6 +80,7 @@ export interface FlowState {
   selectedReferences: ReferenceStyle[]
   placement?: Placement
   variationCount?: VariationCount
+  selectedProvider?: "fal" | "gemini" | "huggingface"
   generationResult?: GenerationResult
   selectedCandidateId?: string
   adjustments?: AdjustmentSettings

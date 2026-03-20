@@ -27,7 +27,7 @@ export function GenerateFlow() {
   // Build visible steps (skip "select" if variationCount === 1)
   const allSteps = ["upload", "placement", "variations", "generate", "select", "adjust"] as const
   const visibleSteps = allSteps.filter(
-    (s) => !(s === "select" && variationCount === 1)
+    (s) => !(s === "variations" || (s === "select" && variationCount === 1))
   )
 
   return (

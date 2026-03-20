@@ -22,8 +22,8 @@ export function StepUpload() {
     goNext,
   } = useFlowStore()
 
-  const [brandMode, setBrandMode] = useState<"logo" | "text">(
-    brandText ? "text" : "logo"
+  const [brandMode, setBrandMode] = useState<"logo" | "text" | "both">(
+    brandText && brandAssetPreviewUrl ? "both" : brandText ? "text" : "logo"
   )
 
   useEffect(() => {
@@ -90,10 +90,16 @@ export function StepUpload() {
     disabled: brandMode === "text",
   })
 
-  const canProceed =
-    storefrontPreviewUrl &&
-    (brandAssetPreviewUrl || (brandMode === "text" && brandText?.trim())) &&
-    selectedReferences.length > 0
+  const hasLogo = Boolean(brandAssetPreviewUrl)
+  const hasText = Boolean(brandText?.trim())
+  const hasValidBrandInput =
+    brandMode === "logo"
+      ? hasLogo
+      : brandMode === "text"
+      ? hasText
+      : hasLogo && hasText
+
+  const canProceed = storefrontPreviewUrl && hasValidBrandInput && selectedReferences.length > 0
 
   return (
     <div className="space-y-8">
@@ -189,9 +195,21 @@ export function StepUpload() {
           >
             Type name
           </button>
+          <button
+            type="button"
+            onClick={() => setBrandMode("both")}
+            className={cn(
+              "flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors",
+              brandMode === "both"
+                ? "bg-black text-white border-black"
+                : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+            )}
+          >
+            Logo + name
+          </button>
         </div>
 
-        {brandMode === "logo" ? (
+        {brandMode !== "text" && (
           <div
             {...brandDropzone.getRootProps()}
             className={cn(
@@ -233,7 +251,9 @@ export function StepUpload() {
               </div>
             )}
           </div>
-        ) : (
+        )}
+
+        {brandMode !== "logo" && (
           <input
             type="text"
             value={brandText ?? ""}
@@ -311,9 +331,20 @@ function ReferenceCard({
           : "border-gray-200 hover:border-gray-300"
       )}
     >
-      {/* Placeholder for reference image */}
-      <div className="h-32 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-        <span className="text-gray-400 text-xs">{reference.name}</span>
+      {/* Reference image */}
+      <div className="h-32 bg-gray-100 overflow-hidden">
+        {reference.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={reference.imageUrl}
+            alt={reference.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-gray-400 text-xs">{reference.name}</span>
+          </div>
+        )}
       </div>
       <div className="p-2.5">
         <p className="text-xs font-semibold text-gray-900">{reference.name}</p>
