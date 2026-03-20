@@ -184,7 +184,7 @@ async function generateWithFal(
 
     // 2. Build the mask at the EXACT same dimensions as the storefront photo
     const maskBuffer = buildMaskPng(imgW, imgH, placement)
-    const maskFile = new File([maskBuffer], "mask.png", { type: "image/png" })
+    const maskFile = new File([new Uint8Array(maskBuffer)], "mask.png", { type: "image/png" })
 
     // 3. Upload both to fal storage in parallel — guarantees URL-based access
     //    without request body size limits
