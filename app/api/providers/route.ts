@@ -24,12 +24,6 @@ export async function GET() {
       available: Boolean(process.env.FAL_KEY),
       badge: "Pro plan required",
     },
-    {
-      id: "huggingface",
-      name: "FLUX Schnell",
-      description: "Fast text-to-image — generates a sign from description only",
-      available: true, // always available as fallback
-    },
   ]
 
   return NextResponse.json(providers)
