@@ -11,18 +11,18 @@ export interface ProviderInfo {
 export async function GET() {
   const providers: ProviderInfo[] = [
     {
-      id: "fal",
-      name: "FLUX.1-fill",
-      description: "Edits your real storefront photo — places the sign only in the selected area",
-      available: Boolean(process.env.FAL_KEY),
-      badge: "Best quality",
-    },
-    {
       id: "gemini",
       name: "Nano Banana (Gemini)",
       description: "Google's multimodal AI — understands your storefront and logo together",
       available: Boolean(process.env.GEMINI_API_KEY),
-      badge: "Requires billing",
+      badge: "Recommended",
+    },
+    {
+      id: "fal",
+      name: "FLUX.1-fill",
+      description: "Inpainting via fal.ai — requires a Pro plan API key",
+      available: Boolean(process.env.FAL_KEY),
+      badge: "Pro plan required",
     },
     {
       id: "huggingface",
