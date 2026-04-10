@@ -10,15 +10,18 @@ const DEPTH_PROFILES = ["flat", "shallow", "medium", "deep"] as const
 const EDGE_PROFILES = ["sharp", "beveled", "rounded"] as const
 const MOUNTING_STYLES = ["flush", "stand-off", "raceway"] as const
 
+export type BrandMode = "logo-only" | "text-only" | "logo-and-text"
+
 export async function planVariations(
   references: ReferenceStyle[],
   variationCount: VariationCount,
-  brandText: string
+  brandText: string,
+  brandMode: BrandMode = "text-only"
 ): Promise<VariantSpec[]> {
   const primary = references[0]
 
   // Always use the local deterministic planner to preserve Gemini quota for image generation.
-  return planDeterministic(primary, variationCount, brandText)
+  return planDeterministic(primary, variationCount, brandText, brandMode)
 }
 
 // ─── Gemini planner ───────────────────────────────────────────────────────────
@@ -73,7 +76,8 @@ Return only the raw JSON array, no markdown, no explanation.`
 function planDeterministic(
   reference: ReferenceStyle,
   count: VariationCount,
-  brandText: string
+  brandText: string,
+  brandMode: BrandMode = "text-only"
 ): VariantSpec[] {
   const specs: VariantSpec[] = []
 
@@ -108,7 +112,7 @@ function planDeterministic(
       hasBackingPlate: i % 3 === 2 ? !reference.hasBackingPlate : reference.hasBackingPlate,
       materialFeel: reference.materialFeel,
       lightingMode: lightMode,
-      prompt: buildPrompt({ brandText, reference, depth, edge, mount, lightMode }),
+      prompt: buildPrompt({ brandText, reference, depth, edge, mount, lightMode, brandMode }),
     })
   }
 
@@ -120,6 +124,7 @@ function buildPrompt({
   reference,
   mount,
   lightMode,
+  brandMode,
 }: {
   brandText: string
   reference: ReferenceStyle
@@ -127,6 +132,7 @@ function buildPrompt({
   edge: string
   mount: string
   lightMode: string
+  brandMode: BrandMode
 }): string {
 
   // ── Mounting description ──────────────────────────────────────────────────
@@ -149,22 +155,44 @@ function buildPrompt({
   // ── Backing plate ─────────────────────────────────────────────────────────
   const backingDesc = reference.hasBackingPlate
     ? "mounted on a rectangular backing panel that frames the sign cleanly against the wall"
-    : "individual letters or logo mounted directly onto the facade with no backing panel"
+    : "individual elements mounted directly onto the facade with no backing panel"
+
+  // ── Brand content — adapts to what the client provided ───────────────────
+  let brandContent: string
+  if (brandMode === "logo-only") {
+    brandContent =
+      `BRAND CONTENT — LOGO ONLY: The client provided a logo image (see attached image). ` +
+      `Place the logo INSIDE the bounding box as the sole sign face content. ` +
+      `Reproduce the logo exactly — same colors, same shapes, same proportions — scaled to fill the sign area. ` +
+      `No brand name text, no extra typography. The logo alone is the entire sign content. ` +
+      `Use the logo's exact colors for the sign face, letters, and illuminated elements.`
+  } else if (brandMode === "text-only") {
+    brandContent =
+      `BRAND CONTENT — TEXT ONLY: No logo was provided. ` +
+      `Display the brand name "${brandText}" as the sign face using clean premium commercial typography. ` +
+      `Style the lettering to match the reference sign's aesthetic and material. ` +
+      `Choose letter colors that match the reference sign's color palette.`
+  } else {
+    brandContent =
+      `BRAND CONTENT — LOGO AND NAME: The client provided both a logo image and the brand name "${brandText}". ` +
+      `Place the logo as the PRIMARY and DOMINANT element of the sign face inside the bounding box — larger, centered or prominently positioned. ` +
+      `Add the brand name "${brandText}" as secondary text below or alongside the logo, in typography matching the reference sign style. ` +
+      `Use the logo's exact colors for both the logo and the text. ` +
+      `The logo must be visually dominant — significantly larger than the text.`
+  }
 
   // ── Final prompt ──────────────────────────────────────────────────────────
   return [
-    `TASK: Replace the existing sign or storefront element in the marked bounding box with a new professionally manufactured sign for "${brandText}".`,
+    `TASK: Replace the existing sign or storefront element in the marked bounding box with a new professionally manufactured sign.`,
 
-    `BRAND CONTENT: The brand logo image provided must be placed INSIDE the bounding box as the sign face. Reproduce the logo exactly — same colors, same shapes, same proportions — scaled to fill the sign area. Do not replace the logo with text. Do not simplify it. The logo is the sign content. If no logo was provided, display "${brandText}" in clean premium commercial typography inside the bounding box.`,
+    brandContent,
 
-    `BRAND COLORS: The sign must use the exact colors from the brand logo. Do not invent colors. The sign face, letters, and any illuminated elements must match the brand's color palette precisely.`,
+    `SIGN STYLE: The reference sign photo is your visual blueprint — match its material, dimensional depth, mounting style, and overall aesthetic exactly. Style: ${reference.name}. Mounting: ${mountDesc}. ${backingDesc}.`,
 
-    `SIGN STYLE: The reference sign photo provided is your visual blueprint — match its material, dimensional depth, mounting style, and overall aesthetic exactly. Style: ${reference.name}. Mounting: ${mountDesc}. ${backingDesc}.`,
+    `ILLUMINATION: Use the reference photo as the lighting guide — replicate the exact illumination type (front-lit, halo backlight, neon, or unlit), the same light color and temperature, the same glow intensity, and the same light spill onto the wall. ${lightDesc}.`,
 
-    `ILLUMINATION: Use the reference photo as the lighting guide — replicate the exact type of illumination shown (front-lit face glow, halo backlight, neon, or unlit), the same light color and temperature, the same glow intensity, and the same way light spills onto the surrounding wall. ${lightDesc}. The lighting on the generated sign must look identical in character to the reference photo.`,
+    `REPLACEMENT RULE: Whatever is currently in the bounding box must be completely removed and replaced. The new sign fills the entire bounding box, anchored to the facade with correct perspective and mounting hardware.`,
 
-    `REPLACEMENT RULE: Whatever is currently in the bounding box must be completely removed and replaced. The new sign fills the entire box area, anchored to the facade with correct perspective and mounting hardware.`,
-
-    `PHOTO PRESERVATION — CRITICAL: Every pixel outside the bounding box must be identical to the original photo — same exact colors, same white balance, same exposure, same contrast, same color temperature, zero color grading or tone adjustment of any kind. Do NOT brighten, warm, cool, saturate, or enhance the original photo in any way. Only the sign inside the bounding box is new.`,
+    `PHOTO PRESERVATION — CRITICAL: Every pixel outside the bounding box must be identical to the original photo — same exact colors, same white balance, same exposure, same contrast, same color temperature. Zero color grading, zero tone adjustment, zero enhancement of any kind outside the sign area.`,
   ].join(" ")
 }

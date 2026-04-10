@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { planVariations } from "@/lib/ai/variation-planner"
+import { planVariations, type BrandMode } from "@/lib/ai/variation-planner"
 import { generateImage, getActiveProvider } from "@/lib/ai/provider"
 import type { ImageData, GenerateImageParams } from "@/lib/ai/provider"
 import type { GenerationResult, Candidate, ReferenceStyle, Placement, VariationCount } from "@/types"
@@ -49,8 +49,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "At least one reference is required" }, { status: 400 })
     }
 
-    // ─── Resolve brand text ─────────────────────────────────────────────────
+    // ─── Resolve brand text and mode ────────────────────────────────────────
     const resolvedBrandText = brandText ?? "Business"
+    const brandMode: BrandMode =
+      brandAssetFile && brandText ? "logo-and-text"
+      : brandAssetFile           ? "logo-only"
+      :                            "text-only"
 
     // ─── Resolve provider: use client selection if valid, else auto-detect ──
     const provider = (
@@ -91,7 +95,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── Plan variations ────────────────────────────────────────────────────
-    const specs = await planVariations(references, variationCount, resolvedBrandText)
+    const specs = await planVariations(references, variationCount, resolvedBrandText, brandMode)
 
     // ─── Generate images in parallel ────────────────────────────────────────
     // Compute exact bounding box from placement (all values in % of image dimensions)
@@ -123,14 +127,21 @@ export async function POST(req: NextRequest) {
         slotLines.push(`Image ${slot++} = the client's storefront — this is the scene to edit, do not alter anything except the sign area.`)
 
         if (brandAssetImageData) {
-          slotLines.push(
-            `Image ${slot++} = the client's brand logo. ` +
-            `This logo must be placed INSIDE the bounding box as the sign face — ` +
-            `reproduce it exactly as it appears (correct colors, correct proportions, correct shapes), ` +
-            `scaled to fill the sign area within the bounding box. ` +
-            `Do not alter the logo design, do not simplify it, do not replace it with text. ` +
-            `The logo IS the sign content.`
-          )
+          if (brandMode === "logo-only") {
+            slotLines.push(
+              `Image ${slot++} = the client's brand logo (LOGO ONLY mode). ` +
+              `This logo is the ONLY sign content — place it inside the bounding box scaled to fill the sign face. ` +
+              `Reproduce it exactly: same colors, same shapes, same proportions. No text, no name added.`
+            )
+          } else {
+            // logo-and-text
+            slotLines.push(
+              `Image ${slot++} = the client's brand logo (LOGO + NAME mode). ` +
+              `Place this logo as the dominant primary element inside the bounding box. ` +
+              `The brand name "${resolvedBrandText}" appears as secondary text below or beside the logo. ` +
+              `Reproduce the logo exactly: same colors, same shapes, same proportions.`
+            )
+          }
         }
 
         if (referenceStyleImages?.length) {
