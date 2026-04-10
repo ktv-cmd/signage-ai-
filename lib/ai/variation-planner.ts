@@ -118,8 +118,6 @@ function planDeterministic(
 function buildPrompt({
   brandText,
   reference,
-  depth,
-  edge,
   mount,
   lightMode,
 }: {
@@ -131,25 +129,6 @@ function buildPrompt({
   lightMode: string
 }): string {
 
-  // ── Material description ──────────────────────────────────────────────────
-  const materialMap: Record<string, string> = {
-    "brushed-metal":  "brushed aluminum faces with a fine directional grain, matte silver sheen",
-    "acrylic":        "smooth frosted acrylic faces, semi-translucent with an even internal glow",
-    "flat":           "precision laser-cut flat aluminum, powder-coated matte finish",
-    "neon":           "exposed bent glass neon tubes, vibrant colored light emission",
-    "dimensional":    "deep matte powder-coated aluminum dimensional letters, luxury dark finish",
-  }
-  const materialDesc = materialMap[reference.materialFeel] ?? `${reference.materialFeel} finish`
-
-  // ── Depth description ─────────────────────────────────────────────────────
-  const depthMap: Record<string, string> = {
-    flat:    "flat cut letters with zero depth, flush to the surface",
-    shallow: "shallow 1-inch channel letters with slight dimensional presence",
-    medium:  "medium 3-inch channel letters with clear dimensional depth",
-    deep:    "deep 5-inch channel letters with strong three-dimensional projection",
-  }
-  const depthDesc = depthMap[depth] ?? `${depth} depth channel letters`
-
   // ── Mounting description ──────────────────────────────────────────────────
   const mountMap: Record<string, string> = {
     "flush":     "flush-mounted directly against the facade surface",
@@ -160,32 +139,32 @@ function buildPrompt({
 
   // ── Lighting description ──────────────────────────────────────────────────
   const lightMap: Record<string, string> = {
-    front: "internally LED front-lit with warm white 3000K LEDs, even face illumination, soft light spill onto facade",
-    back:  "LED halo backlit, creating a floating glow effect between letters and wall surface, 4000K cool white halo",
-    both:  "dual LED lit — front face illumination plus rear halo backlight creating a layered glowing effect",
-    neon:  "exposed neon tube lighting, vivid colored light, characteristic glass tube glow and subtle buzz",
+    front: "internally LED front-lit, even face illumination with soft light spill onto surrounding facade",
+    back:  "LED halo backlit, glowing halo between letters and wall surface",
+    both:  "dual LED lit — bright face illumination combined with a rear halo glow",
+    neon:  "exposed neon tube lighting with vivid colored light and characteristic glass glow",
   }
   const lightDesc = lightMap[lightMode] ?? `${lightMode} illuminated`
 
   // ── Backing plate ─────────────────────────────────────────────────────────
   const backingDesc = reference.hasBackingPlate
-    ? "mounted on a brushed metal rectangular backing panel that frames the letters cleanly"
-    : "individual letters mounted directly onto the facade wall with no backing panel"
+    ? "mounted on a rectangular backing panel that frames the sign cleanly against the wall"
+    : "individual letters or logo mounted directly onto the facade with no backing panel"
 
   // ── Final prompt ──────────────────────────────────────────────────────────
   return [
-    `TASK: Add a brand-new professionally manufactured illuminated business sign displaying the text "${brandText}" onto the storefront shown in the photo.`,
+    `TASK: Replace the existing sign or storefront element in the marked bounding box with a new professionally manufactured sign for "${brandText}".`,
 
-    `SIGN CONSTRUCTION: ${depthDesc}, ${edge} edge profile, ${materialDesc}.`,
+    `BRAND CONTENT: If a brand logo is provided in the images, place it as the sign face — reproduce the logo exactly with its correct colors and proportions. If no logo, display the brand name "${brandText}" in clean premium commercial typography.`,
 
-    `MOUNTING: ${mountDesc}. ${backingDesc}.`,
+    `BRAND COLORS: The sign must use the exact colors from the brand logo. Do not invent colors. The sign face, letters, and any illuminated elements must match the brand's color palette precisely.`,
 
-    `ILLUMINATION: ${lightDesc}. The light source must interact realistically with the facade surface — casting soft shadows, creating ambient light spill on surrounding wall, and reflecting subtly on nearby glass or surfaces.`,
+    `SIGN STYLE: Closely match the reference sign photo — same material, same dimensional depth, same mounting style, same overall aesthetic. Style: ${reference.name}. Mounting: ${mountDesc}. ${backingDesc}.`,
 
-    `SIGN STYLE: ${reference.name}. Match the aesthetic precisely — this is a modern, premium commercial sign produced by a professional signage manufacturer.`,
+    `ILLUMINATION: ${lightDesc}. Light must interact realistically with the wall — soft shadows, ambient spill, realistic reflections on nearby surfaces.`,
 
-    `TECHNICAL QUALITY: The sign must look like a real physical object bolted to the real wall in the photo. Correct perspective matching. Accurate shadow casting from the sign depth onto the wall. Mounting hardware (screws, studs, or raceway box) must be visible and realistic. Zero text errors — every letter perfectly formed and spaced.`,
+    `REPLACEMENT RULE: Whatever is currently in the bounding box must be completely removed and replaced. The new sign fills the entire box area, anchored to the facade with correct perspective and mounting hardware.`,
 
-    `OUTPUT: One photorealistic architectural exterior photo showing the completed storefront with the new sign installed. Professional commercial photography quality.`,
+    `PRESERVE EVERYTHING ELSE: Every pixel outside the bounding box must be identical to the original photo — same walls, same sky, same street, same windows, zero changes.`,
   ].join(" ")
 }
