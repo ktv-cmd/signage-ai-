@@ -105,6 +105,43 @@ export function StepGenerate() {
     handleGenerate(capturedLeadId)
   }
 
+  // Silent re-submission for returning users — saves new session to Supabase
+  // without asking them to fill the form again.
+  const submitSilently = async (): Promise<string | null> => {
+    try {
+      const stored = localStorage.getItem("signai_lead")
+      if (!stored) return null
+      const lead = JSON.parse(stored)
+
+      const fd = new FormData()
+      fd.append("name",    lead.name    ?? "")
+      fd.append("email",   lead.email   ?? "")
+      fd.append("phone",   lead.phone   ?? "")
+      fd.append("company", lead.company ?? "")
+      if (storefrontFile) fd.append("storefront", storefrontFile)
+      if (brandAssetFile) fd.append("logo",       brandAssetFile)
+
+      const res  = await fetch("/api/leads", { method: "POST", body: fd })
+      const json = await res.json().catch(() => ({}))
+      return json.id ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const handleGenerateClick = async () => {
+    const stored = localStorage.getItem("signai_lead")
+    if (stored) {
+      // Returning user — skip modal, submit silently, generate immediately
+      const newLeadId = await submitSilently()
+      if (newLeadId) setLeadId(newLeadId)
+      handleGenerate(newLeadId)
+    } else {
+      // First time — show the form
+      setShowLeadModal(true)
+    }
+  }
+
   const isLoading = status === "uploading" || status === "generating"
 
   return (
@@ -226,7 +263,7 @@ export function StepGenerate() {
       <button
         type="button"
         disabled={isLoading || status === "done" || !selectedProvider}
-        onClick={() => setShowLeadModal(true)}
+        onClick={handleGenerateClick}
         className={cn(
           "w-full py-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors",
           isLoading || status === "done" || !selectedProvider
