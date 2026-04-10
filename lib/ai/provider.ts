@@ -3,7 +3,7 @@
  * Priority: Gemini (Nano Banana) → fal.ai → HuggingFace → mock
  */
 
-export type GenerationProvider = "gemini" | "fal" | "huggingface"
+export type GenerationProvider = "gemini" | "fal" | "replicate" | "huggingface"
 
 export interface ImageData {
   base64: string
@@ -41,6 +41,7 @@ export interface GenerateImageResult {
 }
 
 export function getActiveProvider(): GenerationProvider {
+  if (process.env.REPLICATE_API_TOKEN) return "replicate"
   if (process.env.GEMINI_API_KEY) return "gemini"
   if (process.env.FAL_KEY) return "fal"
   if (process.env.HUGGINGFACE_API_KEY) return "huggingface"
@@ -52,6 +53,7 @@ export async function generateImage(
 ): Promise<GenerateImageResult> {
   const provider = getActiveProvider()
 
+  if (provider === "replicate") return generateWithReplicate(params)
   if (provider === "gemini") return generateWithGemini(params)
   if (provider === "fal") return generateWithFal(params)
   return generateWithHuggingFace(params)
@@ -193,15 +195,16 @@ async function generateWithFal(
       fal.storage.upload(maskFile),
     ])
 
-    // 4. Call FLUX Pro Fill
-    const result = await fal.subscribe("fal-ai/flux-pro/v1/fill", {
+    // 4. Call SDXL Inpaint (free tier on fal.ai)
+    const result = await fal.subscribe("fal-ai/inpaint", {
       input: {
-        image_url:        imageUrl,
-        mask_url:         maskUrl,
-        prompt:           params.prompt,
-        num_images:       1,
-        safety_tolerance: "2",
-        output_format:    "jpeg",
+        model_name:           "diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
+        image_url:            imageUrl,
+        mask_url:             maskUrl,
+        prompt:               params.prompt,
+        negative_prompt:      params.negativePrompt ?? "",
+        num_inference_steps:  30,
+        guidance_scale:       7.5,
       },
     })
 
@@ -337,21 +340,57 @@ function buildMaskPng(
 function extractFalImageUrl(result: unknown): string | undefined {
   type FalImage = { url?: string }
   type FalResult = {
+    image?: FalImage        // fal-ai/inpaint returns { image: { url } }
     images?: FalImage[]
     data?: {
-      images?: FalImage[]
       image?: FalImage
+      images?: FalImage[]
       url?: string
     }
   }
 
   const typed = result as FalResult
   return (
+    typed?.image?.url ??
     typed?.images?.[0]?.url ??
-    typed?.data?.images?.[0]?.url ??
     typed?.data?.image?.url ??
+    typed?.data?.images?.[0]?.url ??
     typed?.data?.url
   )
+}
+
+// ─── Replicate — FLUX.1 Kontext Pro (instruction-based image editing) ─────────
+// No mask needed — the model understands natural language placement instructions.
+// Model: black-forest-labs/flux-kontext-pro ($0.04/image)
+
+async function generateWithReplicate(
+  params: GenerateImageParams
+): Promise<GenerateImageResult> {
+  const Replicate = (await import("replicate")).default
+  const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! })
+
+  // Build input — if we have a storefront image, use it as the source image
+  // and let the prompt describe exactly where and how to place the sign.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const input: Record<string, any> = {
+    prompt: params.prompt,
+    output_format: "jpg",
+    safety_tolerance: 2,
+  }
+
+  if (params.storefrontImageData) {
+    input.input_image = `data:${params.storefrontImageData.mimeType};base64,${params.storefrontImageData.base64}`
+  }
+
+  const output = await replicate.run("black-forest-labs/flux-kontext-pro", { input })
+
+  // Replicate returns a URL string or array of URL strings
+  const url = Array.isArray(output) ? output[0] : output
+  if (!url || typeof url !== "string") {
+    throw new Error("Replicate returned no image")
+  }
+
+  return { imageUrl: url, provider: "replicate" }
 }
 
 // ─── Hugging Face ─────────────────────────────────────────────────────────────

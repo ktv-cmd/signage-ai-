@@ -80,7 +80,8 @@ export interface FlowState {
   selectedReferences: ReferenceStyle[]
   placement?: Placement
   variationCount?: VariationCount
-  selectedProvider?: "fal" | "gemini" | "huggingface"
+  selectedProvider?: "fal" | "gemini" | "replicate" | "huggingface"
+  leadId?: string
   generationResult?: GenerationResult
   selectedCandidateId?: string
   adjustments?: AdjustmentSettings

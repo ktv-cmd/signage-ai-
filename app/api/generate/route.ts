@@ -54,18 +54,19 @@ export async function POST(req: NextRequest) {
 
     // ─── Resolve provider: use client selection if valid, else auto-detect ──
     const provider = (
-      requestedProvider === "fal" || requestedProvider === "gemini" || requestedProvider === "huggingface"
+      requestedProvider === "fal" || requestedProvider === "gemini" ||
+      requestedProvider === "replicate" || requestedProvider === "huggingface"
         ? requestedProvider
         : getActiveProvider()
-    ) as "fal" | "gemini" | "huggingface"
+    ) as "fal" | "gemini" | "replicate" | "huggingface"
 
     let storefrontImageData: ImageData | undefined
     let brandAssetImageData: ImageData | undefined
     let storefrontImageUrl: string | undefined
     let brandAssetImageUrl: string | undefined
 
-    if (provider === "gemini") {
-      // Gemini: pass images as raw inline base64 data
+    if (provider === "gemini" || provider === "replicate") {
+      // Gemini + Replicate: pass images as raw inline base64 data
       storefrontImageData = await fileToImageData(storefrontFile)
       if (brandAssetFile) {
         brandAssetImageData = await fileToImageData(brandAssetFile)
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest) {
     // Drop any that don't exist yet — gracefully degrades to metadata-only prompting.
     let referenceStyleImages: ImageData[] | undefined
     if (provider === "gemini") {
+      // Gemini supports multi-image input — pass reference photos inline
       referenceStyleImages = await loadReferenceStyleImages(references)
     }
 

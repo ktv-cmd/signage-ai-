@@ -24,7 +24,10 @@ interface FlowStore extends FlowState {
   setVariationCount: (count: VariationCount) => void
 
   // Model selector
-  setSelectedProvider: (provider: "fal" | "gemini" | "huggingface") => void
+  setSelectedProvider: (provider: "fal" | "gemini" | "replicate" | "huggingface") => void
+
+  // Lead capture
+  setLeadId: (id: string) => void
 
   // Step 4/5: Generation + Selection
   setGenerationResult: (result: GenerationResult) => void
@@ -133,6 +136,8 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
   setVariationCount: (variationCount) => set({ variationCount }),
 
   setSelectedProvider: (selectedProvider) => set({ selectedProvider }),
+
+  setLeadId: (leadId) => set({ leadId }),
 
   setGenerationResult: (result) => {
     const { variationCount } = get()

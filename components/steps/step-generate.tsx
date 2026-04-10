@@ -5,6 +5,7 @@ import { useFlowStore } from "@/lib/flow-store"
 import { cn } from "@/lib/utils"
 import { Sparkles, Loader2, CheckCircle2 } from "lucide-react"
 import type { ProviderInfo } from "@/app/api/providers/route"
+import { LeadCaptureModal } from "@/components/lead-capture-modal"
 
 export function StepGenerate() {
   const {
@@ -18,6 +19,8 @@ export function StepGenerate() {
     selectedProvider,
     setSelectedProvider,
     setGenerationResult,
+    setLeadId,
+    leadId,
     goNext,
   } = useFlowStore()
 
@@ -25,6 +28,7 @@ export function StepGenerate() {
   const [status, setStatus] = useState<"idle" | "uploading" | "generating" | "done" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState<string>("")
   const [progress, setProgress] = useState(0)
+  const [showLeadModal, setShowLeadModal] = useState(false)
 
   // Load available providers once on mount
   useEffect(() => {
@@ -41,7 +45,7 @@ export function StepGenerate() {
       .catch(() => {})
   }, [selectedProvider, setSelectedProvider])
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (capturedLeadId?: string | null) => {
     if (!storefrontFile || !placement || !variationCount || selectedReferences.length === 0) return
 
     setStatus("uploading")
@@ -77,11 +81,28 @@ export function StepGenerate() {
       setStatus("done")
       setGenerationResult(result)
 
+      // Save generated image to Supabase + send email notification
+      const resolvedLeadId = capturedLeadId ?? leadId
+      const firstImage = result.candidates?.[0]?.imageUrl
+      if (resolvedLeadId && firstImage) {
+        fetch("/api/leads", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: resolvedLeadId, generatedImageUrl: firstImage }),
+        }).catch(() => {})
+      }
+
       setTimeout(() => goNext(), 600)
     } catch (err) {
       setStatus("error")
       setErrorMessage(err instanceof Error ? err.message : "Something went wrong")
     }
+  }
+
+  const handleLeadConfirm = (capturedLeadId: string | null) => {
+    setShowLeadModal(false)
+    if (capturedLeadId) setLeadId(capturedLeadId)
+    handleGenerate(capturedLeadId)
   }
 
   const isLoading = status === "uploading" || status === "generating"
@@ -205,7 +226,7 @@ export function StepGenerate() {
       <button
         type="button"
         disabled={isLoading || status === "done" || !selectedProvider}
-        onClick={handleGenerate}
+        onClick={() => setShowLeadModal(true)}
         className={cn(
           "w-full py-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors",
           isLoading || status === "done" || !selectedProvider
@@ -225,6 +246,15 @@ export function StepGenerate() {
           </>
         )}
       </button>
+
+      {showLeadModal && (
+        <LeadCaptureModal
+          storefrontFile={storefrontFile}
+          logoFile={brandAssetFile}
+          onConfirm={handleLeadConfirm}
+          onClose={() => setShowLeadModal(false)}
+        />
+      )}
     </div>
   )
 }
