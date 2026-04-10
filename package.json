@@ -22,6 +22,7 @@
     "react-dropzone": "^15.0.0",
     "replicate": "^1.4.0",
     "resend": "^6.10.0",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.5.0",
     "zustand": "^5.0.11"
   },
@@ -30,6 +31,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sharp": "^0.32.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",

@@ -158,12 +158,22 @@ export async function POST(req: NextRequest) {
         imageSlotDescription = slotLines.join(" ")
       }
 
+      const fullPrompt = [
+        spec.prompt,
+        placementInstruction,
+        imageSlotDescription,
+      ].filter(Boolean).join(" ")
+
+      // Log the full prompt so you can inspect it in the server terminal
+      console.log(`\n[generate] ── PROMPT (variation ${i + 1}) ────────────────────`)
+      console.log(`Brand mode : ${brandMode}`)
+      console.log(`Provider   : ${provider}`)
+      console.log(`Images sent: storefront${brandAssetImageData ? " + logo" : ""}${referenceStyleImages?.length ? ` + ${referenceStyleImages.length} reference(s)` : ""}`)
+      console.log(`\n${fullPrompt}\n`)
+      console.log(`──────────────────────────────────────────────────────────────\n`)
+
       const params: GenerateImageParams = {
-        prompt: [
-          spec.prompt,
-          placementInstruction,
-          imageSlotDescription,
-        ].filter(Boolean).join(" "),
+        prompt: fullPrompt,
         negativePrompt:
           "blurry, low quality, text errors, spelling mistakes, distorted letters, unrealistic, cartoon",
         // Placement — used by fal.ai to build the inpainting mask
@@ -183,10 +193,27 @@ export async function POST(req: NextRequest) {
 
       const result = await generateImage(params)
 
+      // ── Composite: paste sign area from AI output onto original photo ───────
+      // This guarantees pixel-perfect color preservation outside the bounding box.
+      // Only applies when we have the original image as base64 (Gemini path).
+      let finalImageUrl = result.imageUrl
+      if (provider === "gemini" && storefrontImageData) {
+        try {
+          finalImageUrl = await compositeSignOntoOriginal(
+            storefrontImageData.base64,
+            result.imageUrl,
+            { boxLeft, boxRight, boxTop, boxBottom }
+          )
+        } catch (compErr) {
+          // Compositing failed — fall back to AI output as-is
+          console.warn("[generate] Compositing failed, using raw AI output:", compErr)
+        }
+      }
+
       const candidate: Candidate = {
         id: randomUUID(),
         variantIndex: i,
-        imageUrl: result.imageUrl,
+        imageUrl: finalImageUrl,
         spec,
         generatedAt: new Date().toISOString(),
       }
@@ -234,6 +261,61 @@ async function uploadImageToStorage(file: File): Promise<string | undefined> {
   const { fal } = await import("@fal-ai/client")
   fal.config({ credentials: process.env.FAL_KEY })
   return fal.storage.upload(file)
+}
+
+// ─── Compositor ───────────────────────────────────────────────────────────────
+// Extracts the sign area from the AI-generated image and pastes it onto the
+// original storefront photo. This ensures the background is always pixel-perfect
+// regardless of how much the AI changed it.
+
+async function compositeSignOntoOriginal(
+  originalBase64: string,
+  generatedImageUrl: string,
+  box: { boxLeft: number; boxRight: number; boxTop: number; boxBottom: number }
+): Promise<string> {
+  const sharp = (await import("sharp")).default
+
+  // Decode originals
+  const originalBuf = Buffer.from(originalBase64, "base64")
+
+  let generatedBuf: Buffer
+  if (generatedImageUrl.startsWith("data:")) {
+    const b64 = generatedImageUrl.split(",")[1]
+    generatedBuf = Buffer.from(b64, "base64")
+  } else {
+    const res = await fetch(generatedImageUrl)
+    generatedBuf = Buffer.from(await res.arrayBuffer())
+  }
+
+  // Get original dimensions
+  const { width: origW, height: origH } = await sharp(originalBuf).metadata()
+  if (!origW || !origH) throw new Error("Could not read original image dimensions")
+
+  // Resize generated image to match original dimensions exactly
+  const generatedResized = await sharp(generatedBuf)
+    .resize(origW, origH, { fit: "fill" })
+    .toBuffer()
+
+  // Calculate pixel coordinates from percentage bounding box
+  const left   = Math.round((box.boxLeft   / 100) * origW)
+  const top    = Math.round((box.boxTop    / 100) * origH)
+  const right  = Math.round((box.boxRight  / 100) * origW)
+  const bottom = Math.round((box.boxBottom / 100) * origH)
+  const width  = Math.max(1, right - left)
+  const height = Math.max(1, bottom - top)
+
+  // Extract only the sign region from the AI-generated image
+  const signRegion = await sharp(generatedResized)
+    .extract({ left, top, width, height })
+    .toBuffer()
+
+  // Composite the sign region onto the original photo at the exact same position
+  const composited = await sharp(originalBuf)
+    .composite([{ input: signRegion, left, top }])
+    .jpeg({ quality: 92 })
+    .toBuffer()
+
+  return `data:image/jpeg;base64,${composited.toString("base64")}`
 }
 
 // Load reference style example images from /public/references/*.
