@@ -69,7 +69,7 @@ STRICT RULES:
 
 1. REPLACE, DON'T ADD. Whatever is currently in the bounding box — existing sign, old logo, text, panel, or any element — must be completely removed and replaced with the new brand sign. This is a replacement operation, not an overlay.
 
-2. LOGO IS THE SIGN FACE. If a brand logo image is provided (Image 2), reproduce it as the primary face content of the sign — exact proportions, exact colors, no distortion, no simplification. The logo must look like it was professionally manufactured into the sign material. If only brand text is provided, render it in clean premium commercial typography.
+2. LOGO GOES IN THE BOUNDING BOX. If a brand logo image is provided (Image 2), that logo must appear as the visible face of the sign inside the bounding box. Scale it to fill the sign area proportionally. Reproduce every detail exactly — correct colors, correct shapes, correct proportions. The logo is manufactured into the sign material (etched, illuminated, cut). If only brand text is provided, render it in clean premium commercial typography inside the bounding box.
 
 3. COLORS COME FROM THE BRAND. The sign's colors must come directly from the brand logo provided. Do not use generic silver, white, black, or default material colors. Match the logo's exact color palette — if the logo is red and white, the sign is red and white. If no logo — match the color palette shown in the reference sign photos.
 

@@ -123,7 +123,14 @@ export async function POST(req: NextRequest) {
         slotLines.push(`Image ${slot++} = the client's storefront — this is the scene to edit, do not alter anything except the sign area.`)
 
         if (brandAssetImageData) {
-          slotLines.push(`Image ${slot++} = the client's brand logo — reproduce it faithfully on the sign face.`)
+          slotLines.push(
+            `Image ${slot++} = the client's brand logo. ` +
+            `This logo must be placed INSIDE the bounding box as the sign face — ` +
+            `reproduce it exactly as it appears (correct colors, correct proportions, correct shapes), ` +
+            `scaled to fill the sign area within the bounding box. ` +
+            `Do not alter the logo design, do not simplify it, do not replace it with text. ` +
+            `The logo IS the sign content.`
+          )
         }
 
         if (referenceStyleImages?.length) {

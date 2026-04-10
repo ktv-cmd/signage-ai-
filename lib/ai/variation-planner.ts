@@ -155,7 +155,7 @@ function buildPrompt({
   return [
     `TASK: Replace the existing sign or storefront element in the marked bounding box with a new professionally manufactured sign for "${brandText}".`,
 
-    `BRAND CONTENT: If a brand logo is provided in the images, place it as the sign face — reproduce the logo exactly with its correct colors and proportions. If no logo, display the brand name "${brandText}" in clean premium commercial typography.`,
+    `BRAND CONTENT: The brand logo image provided must be placed INSIDE the bounding box as the sign face. Reproduce the logo exactly — same colors, same shapes, same proportions — scaled to fill the sign area. Do not replace the logo with text. Do not simplify it. The logo is the sign content. If no logo was provided, display "${brandText}" in clean premium commercial typography inside the bounding box.`,
 
     `BRAND COLORS: The sign must use the exact colors from the brand logo. Do not invent colors. The sign face, letters, and any illuminated elements must match the brand's color palette precisely.`,
 
