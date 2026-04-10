@@ -159,9 +159,9 @@ function buildPrompt({
 
     `BRAND COLORS: The sign must use the exact colors from the brand logo. Do not invent colors. The sign face, letters, and any illuminated elements must match the brand's color palette precisely.`,
 
-    `SIGN STYLE: Closely match the reference sign photo — same material, same dimensional depth, same mounting style, same overall aesthetic. Style: ${reference.name}. Mounting: ${mountDesc}. ${backingDesc}.`,
+    `SIGN STYLE: The reference sign photo provided is your visual blueprint — match its material, dimensional depth, mounting style, and overall aesthetic exactly. Style: ${reference.name}. Mounting: ${mountDesc}. ${backingDesc}.`,
 
-    `ILLUMINATION: ${lightDesc}. Light must interact realistically with the wall — soft shadows, ambient spill, realistic reflections on nearby surfaces.`,
+    `ILLUMINATION: Use the reference photo as the lighting guide — replicate the exact type of illumination shown (front-lit face glow, halo backlight, neon, or unlit), the same light color and temperature, the same glow intensity, and the same way light spills onto the surrounding wall. ${lightDesc}. The lighting on the generated sign must look identical in character to the reference photo.`,
 
     `REPLACEMENT RULE: Whatever is currently in the bounding box must be completely removed and replaced. The new sign fills the entire box area, anchored to the facade with correct perspective and mounting hardware.`,
 

@@ -130,7 +130,11 @@ export async function POST(req: NextRequest) {
           const refStart = slot
           const refEnd = slot + referenceStyleImages.length - 1
           const range = refStart === refEnd ? `Image ${refStart}` : `Images ${refStart}–${refEnd}`
-          slotLines.push(`${range} = reference photo(s) of the chosen sign style — match this exact aesthetic, material, and mounting.`)
+          slotLines.push(
+            `${range} = the client's chosen sign style reference photo — this is your PRIMARY visual guide. ` +
+            `Replicate EXACTLY: the lighting type (front-lit, halo backlit, neon, unlit), the light color and temperature, the illumination intensity, the glow spread on the wall, the material texture, the dimensional depth, the mounting style, and the overall premium quality shown in this photo. ` +
+            `The generated sign must look like it belongs to the same product family as this reference.`
+          )
         }
 
         imageSlotDescription = slotLines.join(" ")
