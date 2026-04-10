@@ -165,6 +165,6 @@ function buildPrompt({
 
     `REPLACEMENT RULE: Whatever is currently in the bounding box must be completely removed and replaced. The new sign fills the entire box area, anchored to the facade with correct perspective and mounting hardware.`,
 
-    `PRESERVE EVERYTHING ELSE: Every pixel outside the bounding box must be identical to the original photo — same walls, same sky, same street, same windows, zero changes.`,
+    `PHOTO PRESERVATION — CRITICAL: Every pixel outside the bounding box must be identical to the original photo — same exact colors, same white balance, same exposure, same contrast, same color temperature, zero color grading or tone adjustment of any kind. Do NOT brighten, warm, cool, saturate, or enhance the original photo in any way. Only the sign inside the bounding box is new.`,
   ].join(" ")
 }

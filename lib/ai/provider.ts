@@ -75,7 +75,7 @@ STRICT RULES:
 
 4. MATCH THE REFERENCE STYLE EXACTLY. The reference sign photos show the precise style to reproduce — same material texture, same mounting type, same dimensional depth, same illumination character, same premium quality level.
 
-5. BOUNDING BOX IS ABSOLUTE. Every pixel OUTSIDE the bounding box must be 100% identical to the original storefront photo — same architecture, same brickwork, same sky, same street, same ambient lighting. You are only changing the sign area inside the box. Nothing else changes.
+5. BOUNDING BOX IS ABSOLUTE — PIXEL-PERFECT PRESERVATION. Every single pixel OUTSIDE the bounding box must be byte-for-byte identical to the original storefront photo. This means: same exact colors, same white balance, same exposure, same contrast, same saturation, same color temperature, same shadows, same highlights — zero color grading, zero tone mapping, zero enhancement of any kind applied to the original photo. If the original photo is slightly warm, keep it warm. If it is slightly dark, keep it dark. You are a compositor, not a photo editor. ONLY the sign area inside the bounding box may look different.
 
 6. PHYSICAL REALISM. The new sign must look physically bolted to the facade — correct perspective, correct foreshortening, realistic mounting hardware (studs, screws, or raceway box), and realistic light interaction with the surrounding wall.
 
