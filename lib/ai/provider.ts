@@ -384,10 +384,25 @@ async function generateWithReplicate(
 
   const output = await replicate.run("black-forest-labs/flux-kontext-pro", { input })
 
-  // Replicate returns a URL string or array of URL strings
-  const url = Array.isArray(output) ? output[0] : output
-  if (!url || typeof url !== "string") {
-    throw new Error("Replicate returned no image")
+  // Replicate SDK v1.x returns FileOutput objects — extract the URL string.
+  // FileOutput has a .url() method; fallback handles plain strings and arrays.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extractUrl = (val: any): string | undefined => {
+    if (!val) return undefined
+    if (typeof val === "string") return val
+    if (typeof val?.url === "function") return val.url() as string
+    if (typeof val?.toString === "function") {
+      const s = val.toString()
+      if (s.startsWith("http")) return s
+    }
+    return undefined
+  }
+
+  const raw = Array.isArray(output) ? output[0] : output
+  const url = extractUrl(raw)
+
+  if (!url) {
+    throw new Error("Replicate returned no image — check your API key and model access")
   }
 
   return { imageUrl: url, provider: "replicate" }
