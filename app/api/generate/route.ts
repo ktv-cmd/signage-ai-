@@ -40,7 +40,9 @@ export async function POST(req: NextRequest) {
     const references: ReferenceStyle[] = JSON.parse(referencesRaw)
     const placement: Placement = JSON.parse(placementRaw)
     const variationCount = parseInt(variationCountRaw, 10) as VariationCount
-    const requestedProvider = formData.get("provider") as string | null
+    const rawProvider = formData.get("provider") as string | null
+    const requestedProvider =
+      rawProvider === "fal-grok" || rawProvider === "fal-flux-kontext" ? "fal" : rawProvider
 
     if (![1, 3, 6].includes(variationCount)) {
       return NextResponse.json({ error: "variationCount must be 1, 3, or 6" }, { status: 400 })

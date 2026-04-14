@@ -80,7 +80,8 @@ export interface FlowState {
   selectedReferences: ReferenceStyle[]
   placement?: Placement
   variationCount?: VariationCount
-  selectedProvider?: "fal" | "gemini" | "replicate" | "huggingface"
+  /** UI may use fal sub-ids from /api/providers; API route normalizes them to "fal". */
+  selectedProvider?: "fal" | "fal-grok" | "fal-flux-kontext" | "gemini" | "replicate" | "huggingface"
   leadId?: string
   generationResult?: GenerationResult
   selectedCandidateId?: string

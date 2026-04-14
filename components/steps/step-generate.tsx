@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useFlowStore } from "@/lib/flow-store"
 import { cn } from "@/lib/utils"
 import { Sparkles, Loader2, CheckCircle2 } from "lucide-react"
-import type { ProviderGroup, ProviderInfo } from "@/app/api/providers/route"
+import type { ModelInfo, ProviderGroup } from "@/app/api/providers/route"
 import { LeadCaptureModal } from "@/components/lead-capture-modal"
 
 export function StepGenerate() {
@@ -24,7 +24,7 @@ export function StepGenerate() {
     goNext,
   } = useFlowStore()
 
-  const [providers, setProviders] = useState<ProviderInfo[]>([])
+  const [providers, setProviders] = useState<ModelInfo[]>([])
   const [status, setStatus] = useState<"idle" | "uploading" | "generating" | "done" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState<string>("")
   const [progress, setProgress] = useState(0)
@@ -39,7 +39,7 @@ export function StepGenerate() {
         setProviders(list)
         const ids = new Set(list.map((p) => p.id))
         const first = list.find((p) => p.available)
-        if ((!selectedProvider || !ids.has(selectedProvider)) && first) {
+        if (first && (!selectedProvider || !ids.has(selectedProvider))) {
           setSelectedProvider(first.id)
         }
       })
@@ -60,7 +60,13 @@ export function StepGenerate() {
       formData.append("references", JSON.stringify(selectedReferences))
       formData.append("placement", JSON.stringify(placement))
       formData.append("variationCount", String(variationCount))
-      if (selectedProvider) formData.append("provider", selectedProvider)
+      if (selectedProvider) {
+        const apiProvider =
+          selectedProvider === "fal-grok" || selectedProvider === "fal-flux-kontext"
+            ? "fal"
+            : selectedProvider
+        formData.append("provider", apiProvider)
+      }
 
       setStatus("generating")
       setProgress(30)
@@ -180,7 +186,7 @@ export function StepGenerate() {
                       {p.badge && (
                         <span className={cn(
                           "text-[10px] font-medium px-1.5 py-0.5 rounded",
-                          p.id === "fal"
+                          String(p.id).startsWith("fal")
                             ? "bg-green-100 text-green-700"
                             : "bg-amber-100 text-amber-700"
                         )}>

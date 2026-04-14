@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import type { GenerationProvider } from "@/lib/ai/provider"
 
+/** Listed model id (may be a fal.ai variant; /api/generate normalizes to GenerationProvider). */
+export type ListedModelId = GenerationProvider | "fal-grok" | "fal-flux-kontext"
+
 export interface ModelInfo {
-  id: GenerationProvider
+  id: ListedModelId
   name: string
   description: string
   available: boolean
@@ -19,9 +22,9 @@ export interface ProviderGroup {
 export type ProviderInfo = ModelInfo
 
 export async function GET() {
-  const hasGemini = Boolean(process.env.GEMINI_API_KEY)
-  const hasFal    = Boolean(process.env.FAL_KEY)
+  const hasFal = Boolean(process.env.FAL_KEY)
 
+  // Gemini (Nano Banana) is not listed — fal.ai models are the customer-facing options.
   const groups: ProviderGroup[] = [
     {
       groupId:   "fal",
@@ -44,9 +47,6 @@ export async function GET() {
       ],
     },
   ]
-
-  // hasGemini is kept so the env-var check remains valid for server-side logic
-  void hasGemini
 
   return NextResponse.json(groups)
 }

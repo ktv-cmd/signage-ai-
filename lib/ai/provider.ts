@@ -1,6 +1,6 @@
 /**
  * AI provider abstraction.
- * Priority: Gemini (Nano Banana) → fal.ai → HuggingFace → mock
+ * Default priority: Replicate → fal.ai → Gemini → HuggingFace → mock
  */
 
 export type GenerationProvider = "gemini" | "fal" | "replicate" | "huggingface"
@@ -42,8 +42,8 @@ export interface GenerateImageResult {
 
 export function getActiveProvider(): GenerationProvider {
   if (process.env.REPLICATE_API_TOKEN) return "replicate"
-  if (process.env.GEMINI_API_KEY) return "gemini"
   if (process.env.FAL_KEY) return "fal"
+  if (process.env.GEMINI_API_KEY) return "gemini"
   if (process.env.HUGGINGFACE_API_KEY) return "huggingface"
   return "huggingface" // falls through to mock
 }

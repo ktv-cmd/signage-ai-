@@ -24,7 +24,7 @@ interface FlowStore extends FlowState {
   setVariationCount: (count: VariationCount) => void
 
   // Model selector
-  setSelectedProvider: (provider: "fal" | "gemini" | "replicate" | "huggingface") => void
+  setSelectedProvider: (provider: "fal" | "fal-grok" | "fal-flux-kontext" | "gemini" | "replicate" | "huggingface") => void
 
   // Lead capture
   setLeadId: (id: string) => void
