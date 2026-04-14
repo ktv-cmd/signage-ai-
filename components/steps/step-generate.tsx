@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useFlowStore } from "@/lib/flow-store"
 import { cn } from "@/lib/utils"
 import { Sparkles, Loader2, CheckCircle2 } from "lucide-react"
-import type { ProviderInfo } from "@/app/api/providers/route"
+import type { ProviderGroup, ProviderInfo } from "@/app/api/providers/route"
 import { LeadCaptureModal } from "@/components/lead-capture-modal"
 
 export function StepGenerate() {
@@ -34,12 +34,13 @@ export function StepGenerate() {
   useEffect(() => {
     fetch("/api/providers")
       .then((r) => r.json())
-      .then((list: ProviderInfo[]) => {
+      .then((groups: ProviderGroup[]) => {
+        const list = groups.flatMap((g) => g.models)
         setProviders(list)
-        // Auto-select the first available provider if none selected
-        if (!selectedProvider) {
-          const first = list.find((p) => p.available)
-          if (first) setSelectedProvider(first.id)
+        const ids = new Set(list.map((p) => p.id))
+        const first = list.find((p) => p.available)
+        if ((!selectedProvider || !ids.has(selectedProvider)) && first) {
+          setSelectedProvider(first.id)
         }
       })
       .catch(() => {})
