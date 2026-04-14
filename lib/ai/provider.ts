@@ -3,7 +3,15 @@
  * Default priority: Replicate → fal.ai → Gemini → HuggingFace → mock
  */
 
-export type GenerationProvider = "gemini" | "fal" | "replicate" | "huggingface"
+export type GenerationProvider =
+  | "gemini-2.5"
+  | "gemini-2.0"
+  | "fal-grok"
+  | "fal-flux-kontext"
+  | "gemini"
+  | "fal"
+  | "replicate"
+  | "huggingface"
 
 export interface ImageData {
   base64: string

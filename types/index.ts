@@ -1,3 +1,5 @@
+import type { GenerationProvider } from "@/lib/ai/provider"
+
 export type VariationCount = 1 | 3 | 6
 
 export interface ReferenceStyle {
@@ -80,8 +82,8 @@ export interface FlowState {
   selectedReferences: ReferenceStyle[]
   placement?: Placement
   variationCount?: VariationCount
-  /** UI may use fal sub-ids from /api/providers; API route normalizes them to "fal". */
-  selectedProvider?: "fal" | "fal-grok" | "fal-flux-kontext" | "gemini" | "replicate" | "huggingface"
+  /** Model id from /api/providers; matches GenerationProvider in lib/ai/provider. */
+  selectedProvider?: GenerationProvider
   leadId?: string
   generationResult?: GenerationResult
   selectedCandidateId?: string
