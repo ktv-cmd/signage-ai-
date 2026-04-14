@@ -34,6 +34,7 @@ export function StepPlacement() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [current, setCurrent] = useState<Placement>(placement ?? DEFAULT_PLACEMENT)
+  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null)
   // Use a ref so the pointermove closure always has the latest drag state
   const drag = useRef<DragState | null>(null)
   const [activeHandle, setActiveHandle] = useState<DragHandle | null>(null)
@@ -44,6 +45,30 @@ export function StepPlacement() {
       setPlacement(DEFAULT_PLACEMENT)
     }
   }, [placement, setPlacement])
+
+  useEffect(() => {
+    if (!storefrontPreviewUrl) {
+      setImageAspectRatio(null)
+      return
+    }
+
+    let cancelled = false
+    const img = new window.Image()
+    img.onload = () => {
+      if (cancelled) return
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        setImageAspectRatio(img.naturalWidth / img.naturalHeight)
+      }
+    }
+    img.onerror = () => {
+      if (!cancelled) setImageAspectRatio(null)
+    }
+    img.src = storefrontPreviewUrl
+
+    return () => {
+      cancelled = true
+    }
+  }, [storefrontPreviewUrl])
 
   const commit = (patch: Partial<Placement>) => {
     const next = { ...current, ...patch }
@@ -176,7 +201,7 @@ export function StepPlacement() {
       <div
         ref={containerRef}
         className="relative rounded-xl overflow-visible bg-gray-900 select-none touch-none"
-        style={{ aspectRatio: "16/9" }}
+        style={{ aspectRatio: imageAspectRatio ?? 16 / 9 }}
         onMouseMove={onPointerMove}
         onMouseUp={onPointerUp}
         onMouseLeave={onPointerUp}
