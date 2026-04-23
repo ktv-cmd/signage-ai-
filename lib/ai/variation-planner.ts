@@ -95,17 +95,7 @@ function planDeterministic(
   // SAFETY VALIDATION RULES
   // ═══════════════════════════════════════════════════════════════
   
-  // 1. NEON CHECK: Neon is forbidden - overwrite to "No-lit"
-  if (reference.lightingType === "neon" || reference.compatibleLightModes.includes("neon" as any)) {
-    console.warn('[SAFETY] Neon lighting detected - overriding to no-light mode')
-    reference = {
-      ...reference,
-      lightingType: "front",
-      compatibleLightModes: ["front"]
-    }
-  }
-  
-  // 2. COLOR VALIDATION: Ensure valid color with fallback
+  // 1. COLOR VALIDATION: Ensure valid color with fallback
   const finalColor = textStyling?.color || "#C0C0C0" // Default: brushed silver (most common)
   const validatedTextStyling: TextStyling = {
     fontStyle: textStyling?.fontStyle || "modern-sans",
