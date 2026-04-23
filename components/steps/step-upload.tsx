@@ -1,31 +1,177 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import { useDropzone } from "react-dropzone"
 import { useFlowStore } from "@/lib/flow-store"
 import { REFERENCE_STYLES } from "@/lib/references"
 import { cn, createObjectUrl } from "@/lib/utils"
-import { Upload, X, CheckCircle2, Image as ImageIcon } from "lucide-react"
-import type { ReferenceStyle } from "@/types"
+import { Upload, X, CheckCircle2, Image as ImageIcon, Type } from "lucide-react"
+import type { ReferenceStyle, FontStyle } from "@/types"
+
+// Font and color selector component for text-only mode
+function TextStylingSelector() {
+  const { textStyling, setTextStyling } = useFlowStore()
+  
+  const fontOptions: { id: FontStyle; name: string; preview: string }[] = [
+    { id: "modern-sans", name: "Modern Sans", preview: "Aa" },
+    { id: "classic-serif", name: "Classic Serif", preview: "Aa" },
+    { id: "bold-condensed", name: "Bold Condensed", preview: "Aa" },
+  ]
+
+  // Default to most common sign color: brushed silver/chrome (#C0C0C0)
+  const currentFont = textStyling?.fontStyle || "modern-sans"
+  const currentColor = textStyling?.color || "#C0C0C0"
+  
+  // Initialize with defaults if not set
+  React.useEffect(() => {
+    if (!textStyling) {
+      setTextStyling({ fontStyle: "modern-sans", color: "#C0C0C0" })
+    }
+  }, [textStyling, setTextStyling])
+
+  return (
+    <div className="space-y-4 pt-4 border-t border-gray-200">
+      {/* Font Selection */}
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <Type size={16} />
+          Font Style
+        </label>
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {fontOptions.map((font) => (
+            <button
+              key={font.id}
+              type="button"
+              onClick={() => setTextStyling({ fontStyle: font.id, color: currentColor })}
+              className={cn(
+                "flex flex-col items-center gap-2 p-3 sm:p-4 rounded-lg border-2 transition-all touch-manipulation",
+                "min-h-[80px] sm:min-h-[90px]",
+                currentFont === font.id
+                  ? "border-black bg-gray-50"
+                  : "border-gray-200 hover:border-gray-300 active:bg-gray-50"
+              )}
+            >
+              <span 
+                className={cn(
+                  "text-2xl sm:text-3xl font-bold",
+                  font.id === "modern-sans" && "font-sans",
+                  font.id === "classic-serif" && "font-serif",
+                  font.id === "bold-condensed" && "font-sans tracking-tighter"
+                )}
+              >
+                {font.preview}
+              </span>
+              <span className="text-xs sm:text-sm text-gray-600">{font.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Color Selection - Mobile Optimized */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Letter Color</label>
+        
+        <div className="flex items-center gap-3 sm:gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          {/* Color Picker - Larger touch target on mobile */}
+          <input
+            type="color"
+            value={currentColor}
+            onChange={(e) => setTextStyling({ fontStyle: currentFont, color: e.target.value })}
+            className="w-16 h-16 sm:w-14 sm:h-14 rounded-lg cursor-pointer border-2 border-gray-300 touch-manipulation flex-shrink-0"
+          />
+          
+          {/* Selected Color Info */}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm sm:text-base font-semibold text-gray-900">Selected Color</p>
+            <p className="text-xs sm:text-sm text-gray-500 font-mono mt-0.5 truncate">{currentColor.toUpperCase()}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function StepUpload() {
   const {
     storefrontPreviewUrl,
     brandAssetPreviewUrl,
     brandText,
+    textStyling,
     selectedReferences,
     setStorefront,
     setBrandAsset,
     setBrandText,
+    setTextStyling,
     clearBrandAsset,
-    toggleReference,
+    setSelectedReferences,
+    selectReference,
     goNext,
   } = useFlowStore()
 
-  const [brandMode, setBrandMode] = useState<"logo" | "text" | "both">(
-    brandText && brandAssetPreviewUrl ? "both" : brandText ? "text" : "logo"
-  )
+  // Extract dominant color from logo image - DEFINED FIRST before useEffect uses it
+  const extractDominantColor = useCallback((imageUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = document.createElement('img')
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve('#C0C0C0')
+          return
+        }
 
+        const size = 100
+        canvas.width = size
+        canvas.height = size
+        ctx.drawImage(img, 0, 0, size, size)
+
+        try {
+          const imageData = ctx.getImageData(0, 0, size, size)
+          const data = imageData.data
+          
+          const colorMap: { [key: string]: number } = {}
+          
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i]
+            const g = data[i + 1]
+            const b = data[i + 2]
+            const a = data[i + 3]
+            
+            if (a < 128 || (r > 240 && g > 240 && b > 240)) continue
+            
+            const rBucket = Math.floor(r / 32) * 32
+            const gBucket = Math.floor(g / 32) * 32
+            const bBucket = Math.floor(b / 32) * 32
+            const key = `${rBucket},${gBucket},${bBucket}`
+            
+            colorMap[key] = (colorMap[key] || 0) + 1
+          }
+          
+          let maxCount = 0
+          let dominantColor = '192,192,192'
+          
+          for (const [color, count] of Object.entries(colorMap)) {
+            if (count > maxCount) {
+              maxCount = count
+              dominantColor = color
+            }
+          }
+          
+          const [r, g, b] = dominantColor.split(',').map(Number)
+          const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')
+          resolve(hex)
+        } catch (err) {
+          console.error('Color extraction failed:', err)
+          resolve('#C0C0C0')
+        }
+      }
+      img.onerror = () => resolve('#C0C0C0')
+      img.src = imageUrl
+    })
+  }, [])
+
+  // Paste handler - uses extractDominantColor defined above
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
       const items = event.clipboardData?.items
@@ -47,19 +193,30 @@ export function StepUpload() {
 
       event.preventDefault()
 
-      // Prefer filling required storefront first; otherwise treat paste as logo while in logo mode.
+      // Prefer filling required storefront first; otherwise treat as logo
       if (!storefrontPreviewUrl) {
         setStorefront(file, createObjectUrl(file))
         return
       }
-      if (brandMode === "logo") {
-        setBrandAsset(file, createObjectUrl(file))
+      
+      // Always allow pasting logo (no mode restriction)
+      const previewUrl = createObjectUrl(file)
+      setBrandAsset(file, previewUrl)
+      
+      // If text is already provided, extract color for unified branding
+      if (brandText?.trim()) {
+        extractDominantColor(previewUrl).then(color => {
+          setTextStyling({ 
+            fontStyle: textStyling?.fontStyle || "modern-sans", 
+            color 
+          })
+        })
       }
     }
 
     window.addEventListener("paste", onPaste)
     return () => window.removeEventListener("paste", onPaste)
-  }, [brandMode, setBrandAsset, setStorefront, storefrontPreviewUrl])
+  }, [brandText, setBrandAsset, setStorefront, storefrontPreviewUrl, extractDominantColor, setTextStyling, textStyling?.fontStyle])
 
   const onDropStorefront = useCallback(
     (acceptedFiles: File[]) => {
@@ -70,11 +227,24 @@ export function StepUpload() {
   )
 
   const onDropBrand = useCallback(
-    (acceptedFiles: File[]) => {
+    async (acceptedFiles: File[]) => {
       const file = acceptedFiles[0]
-      if (file) setBrandAsset(file, createObjectUrl(file))
+      if (!file) return
+      
+      const previewUrl = createObjectUrl(file)
+      setBrandAsset(file, previewUrl)
+      
+      // If text is already provided, extract color for unified branding
+      if (brandText?.trim()) {
+        const dominantColor = await extractDominantColor(previewUrl)
+        const currentFont = textStyling?.fontStyle || "modern-sans"
+        setTextStyling({ 
+          fontStyle: currentFont, 
+          color: dominantColor 
+        })
+      }
     },
-    [setBrandAsset]
+    [setBrandAsset, brandText, extractDominantColor, setTextStyling, textStyling?.fontStyle]
   )
 
   const storefrontDropzone = useDropzone({
@@ -87,19 +257,47 @@ export function StepUpload() {
     onDrop: onDropBrand,
     accept: { "image/*": [] },
     maxFiles: 1,
-    disabled: brandMode === "text",
   })
 
   const hasLogo = Boolean(brandAssetPreviewUrl)
   const hasText = Boolean(brandText?.trim())
-  const hasValidBrandInput =
-    brandMode === "logo"
-      ? hasLogo
-      : brandMode === "text"
-      ? hasText
-      : hasLogo && hasText
+  
+  // Auto-detect brand mode based on what's provided
+  const detectedBrandMode: "logo" | "text" | "both" = 
+    hasLogo && hasText ? "both" :
+    hasLogo ? "logo" :
+    hasText ? "text" :
+    "logo" // default
+  
+  // Valid if at least one brand input is provided
+  const hasValidBrandInput = hasLogo || hasText
 
-  const canProceed = storefrontPreviewUrl && hasValidBrandInput && selectedReferences.length > 0
+  const canProceed =
+    storefrontPreviewUrl && hasValidBrandInput && selectedReferences.length === 1
+
+  // Extract color from logo when both logo and text are provided
+  useEffect(() => {
+    if (hasLogo && hasText && brandAssetPreviewUrl) {
+      extractDominantColor(brandAssetPreviewUrl).then(color => {
+        setTextStyling({ 
+          fontStyle: textStyling?.fontStyle || "modern-sans", 
+          color 
+        })
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLogo, hasText, brandAssetPreviewUrl])
+
+  // Single-select only: drop invalid ids, collapse legacy multi-select to first choice.
+  useEffect(() => {
+    const validIds = new Set(REFERENCE_STYLES.map((r) => r.id))
+    let next = selectedReferences.filter((r) => validIds.has(r.id))
+    if (next.length > 1) next = [next[0]!]
+    const same =
+      next.length === selectedReferences.length &&
+      next.every((r, i) => r.id === selectedReferences[i]?.id)
+    if (!same) setSelectedReferences(next)
+  }, [selectedReferences, setSelectedReferences])
 
   return (
     <div className="space-y-8">
@@ -133,7 +331,7 @@ export function StepUpload() {
               <img
                 src={storefrontPreviewUrl}
                 alt="Storefront"
-                className="w-full h-56 object-cover"
+                className="w-full h-auto max-h-96"
               />
               <button
                 type="button"
@@ -165,102 +363,119 @@ export function StepUpload() {
         </div>
       </div>
 
-      {/* Brand: logo or text */}
-      <div className="space-y-3">
-        <label className="block text-sm font-medium text-gray-700">
-          Your brand <span className="text-red-500">*</span>
-        </label>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setBrandMode("logo")}
-            className={cn(
-              "flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors",
-              brandMode === "logo"
-                ? "bg-black text-white border-black"
-                : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-            )}
-          >
-            Upload logo
-          </button>
-          <button
-            type="button"
-            onClick={() => setBrandMode("text")}
-            className={cn(
-              "flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors",
-              brandMode === "text"
-                ? "bg-black text-white border-black"
-                : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-            )}
-          >
-            Type name
-          </button>
-          <button
-            type="button"
-            onClick={() => setBrandMode("both")}
-            className={cn(
-              "flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors",
-              brandMode === "both"
-                ? "bg-black text-white border-black"
-                : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-            )}
-          >
-            Logo + name
-          </button>
+      {/* Brand: logo and/or text - User provides at least one */}
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Your brand <span className="text-red-500">*</span>
+          </label>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Add your logo, business name, or both
+          </p>
         </div>
 
-        {brandMode !== "text" && (
-          <div
-            {...brandDropzone.getRootProps()}
-            className={cn(
-              "border-2 border-dashed rounded-xl cursor-pointer transition-colors",
-              brandDropzone.isDragActive
-                ? "border-black bg-gray-50"
-                : brandAssetPreviewUrl
-                ? "border-gray-200"
-                : "border-gray-300 bg-white hover:border-gray-400"
-            )}
-          >
-            <input {...brandDropzone.getInputProps()} />
-            {brandAssetPreviewUrl ? (
-              <div className="relative flex items-center gap-3 p-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={brandAssetPreviewUrl}
-                  alt="Logo"
-                  className="h-12 w-auto object-contain rounded"
-                />
-                <span className="text-sm text-gray-600 flex-1">Logo uploaded</span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); clearBrandAsset() }}
-                  className="p-1 hover:bg-gray-100 rounded transition-colors"
-                >
-                  <X size={14} className="text-gray-400" />
-                </button>
+        {/* Logo Upload */}
+        <div
+          {...brandDropzone.getRootProps()}
+          className={cn(
+            "border-2 border-dashed rounded-xl cursor-pointer transition-colors",
+            brandDropzone.isDragActive
+              ? "border-black bg-gray-50"
+              : brandAssetPreviewUrl
+              ? "border-green-500 bg-green-50"
+              : "border-gray-300 bg-white hover:border-gray-400"
+          )}
+        >
+          <input {...brandDropzone.getInputProps()} />
+          {brandAssetPreviewUrl ? (
+            <div className="relative flex items-center gap-3 p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={brandAssetPreviewUrl}
+                alt="Logo"
+                className="h-12 w-auto object-contain rounded"
+              />
+              <div className="flex-1">
+                <span className="text-sm font-medium text-green-700">Logo uploaded</span>
+                <p className="text-xs text-green-600">Click to replace</p>
               </div>
-            ) : (
-              <div className="flex items-center gap-3 p-4">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
-                  <ImageIcon size={18} className="text-gray-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Upload your logo</p>
-                  <p className="text-xs text-gray-400">PNG with transparent background works best · paste with Cmd/Ctrl+V</p>
-                </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); clearBrandAsset() }}
+                className="p-1.5 hover:bg-green-100 rounded transition-colors"
+              >
+                <X size={14} className="text-green-600" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 p-4">
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                <ImageIcon size={18} className="text-gray-400" />
               </div>
-            )}
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-700">Upload your logo</p>
+                <p className="text-xs text-gray-400">PNG with transparent background works best</p>
+              </div>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">Optional</span>
+            </div>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400 font-medium">AND / OR</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
+        {/* Business Name Input */}
+        <div className="space-y-2">
+          <div className={cn(
+            "border-2 rounded-xl transition-colors",
+            brandText?.trim()
+              ? "border-green-500 bg-green-50"
+              : "border-gray-200"
+          )}>
+            <input
+              type="text"
+              value={brandText ?? ""}
+              onChange={(e) => setBrandText(e.target.value)}
+              placeholder="Enter your business name"
+              className={cn(
+                "w-full px-4 py-3 text-sm bg-transparent rounded-xl focus:outline-none",
+                brandText?.trim() ? "placeholder:text-green-400" : "placeholder:text-gray-400"
+              )}
+            />
+          </div>
+          {!brandText?.trim() && (
+            <p className="text-xs text-gray-400 pl-1">Optional if you have a logo</p>
+          )}
+        </div>
+        
+        {/* Font and Color Selection - Show when text is provided */}
+        {brandText?.trim() && (
+          <TextStylingSelector />
+        )}
+
+        {/* Validation message */}
+        {!hasLogo && !hasText && (
+          <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <span className="text-amber-600 text-sm">Please add a logo or business name (or both)</span>
           </div>
         )}
 
-        {brandMode !== "logo" && (
-          <input
-            type="text"
-            value={brandText ?? ""}
-            onChange={(e) => setBrandText(e.target.value)}
-            placeholder="e.g. Metropolitan Smiles"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-gray-400 transition-colors"
-          />
+        {/* Auto-detected mode indicator */}
+        {(hasLogo || hasText) && (
+          <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <CheckCircle2 size={16} className="text-green-600" />
+            <span className="text-sm text-gray-600">
+              {hasLogo && hasText 
+                ? "Logo + Name mode — Your sign will feature both"
+                : hasLogo 
+                ? "Logo only mode — Sign will display your logo"
+                : "Text only mode — Sign will display your business name"}
+            </span>
+          </div>
         )}
       </div>
 
@@ -271,7 +486,7 @@ export function StepUpload() {
             Choose sign style <span className="text-red-500">*</span>
           </label>
           <p className="text-xs text-gray-400 mt-0.5">
-            You can select more than one. Lighting is baked into each style.
+            Pick one style. Lighting is baked into each option.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -279,8 +494,8 @@ export function StepUpload() {
             <ReferenceCard
               key={ref.id}
               reference={ref}
-              selected={selectedReferences.some((r) => r.id === ref.id)}
-              onToggle={() => toggleReference(ref)}
+              selected={selectedReferences[0]?.id === ref.id}
+              onSelect={() => selectReference(ref)}
             />
           ))}
         </div>
@@ -314,16 +529,17 @@ export function StepUpload() {
 function ReferenceCard({
   reference,
   selected,
-  onToggle,
+  onSelect,
 }: {
   reference: ReferenceStyle
   selected: boolean
-  onToggle: () => void
+  onSelect: () => void
 }) {
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={onSelect}
+      aria-pressed={selected}
       className={cn(
         "relative text-left rounded-xl border-2 overflow-hidden transition-all",
         selected
@@ -338,7 +554,7 @@ function ReferenceCard({
           <img
             src={reference.imageUrl}
             alt={reference.name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain bg-gray-900"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

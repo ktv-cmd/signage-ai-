@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowRight, Layers, Zap, Sliders } from "lucide-react"
 
 export default function HomePage() {
@@ -8,16 +9,20 @@ export default function HomePage() {
       <header className="border-b border-gray-200 bg-white">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
-              <span className="text-white text-sm font-bold">K</span>
-            </div>
-            <span className="font-semibold text-gray-900">Kaykov Media</span>
+            <Image
+              src="/Logo Kaykov Media_C.PNG"
+              alt="Kaykov Media"
+              width={120}
+              height={40}
+              className="object-contain brightness-0"
+              priority
+            />
           </div>
           <Link
             href="/generate"
             className="bg-black text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
           >
-            Start Free
+            Get started
           </Link>
         </div>
       </header>
@@ -49,7 +54,7 @@ export default function HomePage() {
             <ArrowRight size={18} />
           </Link>
 
-          <p className="mt-4 text-sm text-gray-400">No account needed · Free to try</p>
+          <p className="mt-4 text-sm text-gray-400">No account needed</p>
         </section>
 
         {/* How it works */}

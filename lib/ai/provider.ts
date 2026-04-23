@@ -5,7 +5,6 @@
 
 export type GenerationProvider =
   | "gemini-2.5"
-  | "gemini-2.0"
   | "fal-grok"
   | "fal-flux-kontext"
   | "gemini"
@@ -18,10 +17,19 @@ export interface ImageData {
   mimeType: string
 }
 
+/** Provider actually invoked by `generateImage` (client may map fal-grok / fal-flux-kontext to fal). */
+export type ApiGenerationProvider =
+  | "fal"
+  | "gemini"
+  | "gemini-2.5"
+  | "replicate"
+  | "huggingface"
+
 export interface GenerateImageParams {
   prompt: string
   negativePrompt?: string
-  // Placement data — used to build the inpainting mask for fal.ai FLUX fill
+  /** When set (e.g. from /api/generate), this provider is used instead of auto-detection. */
+  provider?: ApiGenerationProvider
   placement?: {
     centerX: number
     centerY: number
@@ -36,6 +44,8 @@ export interface GenerateImageParams {
   referenceStyleImages?: ImageData[] // images 3–N — example sign style photos
   // fal.ai / HuggingFace path — raw file for upload
   storefrontFile?: File
+  /** Client brush layer as PNG; resized server-side to storefront dimensions. */
+  placementBrushPng?: Buffer
   // Legacy URL fields
   referenceImageUrl?: string
   brandAssetImageUrl?: string
@@ -59,49 +69,204 @@ export function getActiveProvider(): GenerationProvider {
 export async function generateImage(
   params: GenerateImageParams
 ): Promise<GenerateImageResult> {
-  const provider = getActiveProvider()
+  const provider = params.provider ?? getActiveProvider()
 
   if (provider === "replicate") return generateWithReplicate(params)
-  if (provider === "gemini") return generateWithGemini(params)
+  if (provider === "gemini" || provider === "gemini-2.5") {
+    const modelId = "gemini-2.5-flash-image"
+    const resultProvider: GenerationProvider =
+      provider === "gemini-2.5" ? "gemini-2.5" : "gemini"
+    return generateWithGemini(params, modelId, resultProvider)
+  }
   if (provider === "fal") return generateWithFal(params)
   return generateWithHuggingFace(params)
 }
 
 // ─── Hardcoded system instruction sent with every Gemini generation ───────────
 const SIGN_SYSTEM_INSTRUCTION = `
-You are a professional signage expert, exterior designer, and CGI compositor.
+# ROLE
+You are a Senior Architectural Signage Visualization Architect. You manage two layers of logic:
+1. STRUCTURAL LAYER (The 'What'): Defines the Signage Case.
+2. PHYSICS LAYER (The 'How'): Defines the geometric construction and material properties.
 
-Your task: look at the provided storefront photo and REPLACE the sign or storefront element inside the specified bounding box with a new professionally manufactured business sign.
+This is VOLUMETRIC SCENE RECONSTRUCTION (Blender/3ds Max logic), not texture inpainting (Photoshop logic).
 
-STRICT RULES:
+IMPORTANT: Create ORIGINAL custom fabrication designs. Do not replicate existing branded signage. Reference style images are for technical construction guidance only (mounting, lighting, materials) — not for copying specific designs or aesthetics.
 
-1. REPLACE, DON'T ADD. Whatever is currently in the bounding box — existing sign, old logo, text, panel, or any element — must be completely removed and replaced with the new brand sign. This is a replacement operation, not an overlay.
+═══════════════════════════════════════════════════════════════════════════
+LAYER 2: PHYSICS & CONSTRUCTION RULES (THE 'HOW')
+═══════════════════════════════════════════════════════════════════════════
 
-2. LOGO GOES IN THE BOUNDING BOX. If a brand logo image is provided (Image 2), that logo must appear as the visible face of the sign inside the bounding box. Scale it to fill the sign area proportionally. Reproduce every detail exactly — correct colors, correct shapes, correct proportions. The logo is manufactured into the sign material (etched, illuminated, cut). If only brand text is provided, render it in clean premium commercial typography inside the bounding box.
+## MASK ERASURE PROTOCOL (Critical):
+The golden zone is a VOLUMETRIC VOID marking construction coordinates. It is TEMPORARY and must be 100% erased.
 
-3. COLORS COME FROM THE BRAND. The sign's colors must come directly from the brand logo provided. Do not use generic silver, white, black, or default material colors. Match the logo's exact color palette — if the logo is red and white, the sign is red and white. If no logo — match the color palette shown in the reference sign photos.
+EXECUTION SEQUENCE:
+1. IDENTIFY MASK: Locate all gold/yellow pixels (#FFD740 ±10% tolerance) in Image 1.
+2. SURFACE RESTORATION: FIRST, completely erase the golden mask and RECONSTRUCT the underlying building surface texture:
+   - Analyze surrounding facade (brick pattern, mortar lines, wood grain, stucco relief, paint color)
+   - INPAINT/RESTORE that texture across entire golden zone as if mask never existed
+   - Do NOT blend gold into the scene - completely overwrite it
+3. GEOMETRIC INSERTION: NOW insert the extruded 3D sign mesh onto the restored surface as a physical structure bolted to the wall
+4. COVERAGE LOGIC:
+   - If sign FILLS zone → Sign covers restored surface
+   - If sign SMALLER → Exposed areas show RESTORED TEXTURE (not gold)
+   - If sign LARGER → Scale down to fit within boundaries
+5. ZERO GOLD POLICY: Final output = 0% gold/yellow pixels. All gold areas either (a) covered by sign OR (b) restored to facade texture
 
-4. MATCH THE REFERENCE STYLE EXACTLY. The reference sign photos show the precise style to reproduce — same material texture, same mounting type, same dimensional depth, same illumination character, same premium quality level.
+## GEOMETRY ENFORCEMENT (Forces 3D Depth):
+- Always use terms: "Extruded," "Volumetric Mesh," "Z-axis protrusion"
+- Specify exact depth: 3.5 inches (89mm) perpendicular to wall's surface normal
+- Return planes (sides) must be visible to prove 3D depth
+- Each element has measurable thickness - NOT flat textures
 
-5. BOUNDING BOX IS ABSOLUTE — PIXEL-PERFECT PRESERVATION. Every single pixel OUTSIDE the bounding box must be byte-for-byte identical to the original storefront photo. This means: same exact colors, same white balance, same exposure, same contrast, same saturation, same color temperature, same shadows, same highlights — zero color grading, zero tone mapping, zero enhancement of any kind applied to the original photo. If the original photo is slightly warm, keep it warm. If it is slightly dark, keep it dark. You are a compositor, not a photo editor. ONLY the sign area inside the bounding box may look different.
+## MATERIAL SHADERS (PBR Parameters):
+Metal Returns (Brushed Aluminum):
+- Metallic: 0.95, Roughness: 0.35, Anisotropy: 0.6
+- Anisotropic highlights running perpendicular to extrusion direction
+- Directional grain visible
 
-6. PHYSICAL REALISM. The new sign must look physically bolted to the facade — correct perspective, correct foreshortening, realistic mounting hardware (studs, screws, or raceway box), and realistic light interaction with the surrounding wall.
+Acrylic Faces (if illuminated):
+- IOR: 1.49 (acrylic refractive index)
+- Transmission for light passage
+- Subsurface scattering for internal glow diffusion
 
-7. OUTPUT. One single photorealistic wide exterior photograph of the completed storefront with the new sign installed. Professional architectural photography quality. 16:9 aspect ratio.
+## LIGHTING & EMISSION RULES:
+
+IF 'NO LIGHT' SELECTED (Non-Illuminated Signs):
+PROHIBITED TERMS:
+- ❌ glow, bloom, halo, soft light, neon, luminescence, emission
+- ❌ internal glow, face glow, edge glow
+- ❌ LED, backlight, front-light
+
+REQUIRED SPECIFICATIONS:
+- ✅ Matte surfaces (no emission)
+- ✅ Hard contact shadows (Ambient Occlusion)
+- ✅ Sun-lit / daylight only
+- ✅ Opaque solid materials
+- ✅ Zero emission value
+- ✅ External environmental lighting only
+
+IF 'LIGHT' SELECTED (Illuminated Signs):
+Use Ray-traced PBR with proper physics:
+- Front-lit: Subsurface scattering through acrylic faces, edge glow from refraction
+- Back-lit: Ray-traced light wash on wall BEHIND sign, inverse-square falloff, NO face glow
+- Combined: Both effects present simultaneously
+
+## COLOR INTEGRITY:
+BRANDING RULE: When logo provided + name text present (Case C):
+- Sample dominant HEX color from logo image
+- Apply EXACT sampled color to name letterforms
+- Ensures 100% brand color consistency across logo and text
+- No interpretation or adjustment - direct HEX transfer
+
+═══════════════════════════════════════════════════════════════════════════
+LAYER 1: STRUCTURAL RULES (THE CASES)
+═══════════════════════════════════════════════════════════════════════════
+
+CASE A (LOGO ONLY):
+- Construct as 3D CABINET LIGHTBOX MESH
+- Box primitive: translucent front face + 4 aluminum return walls + back mounting plate
+- Z-axis extrusion: 3.5 inches (89mm) perpendicular to wall's surface normal
+- Color: Extract EXACT HEX/Pantone from logo image (non-negotiable brand identity)
+
+LIGHTBOX PHYSICS PROTOCOL (Forced 3D Integration):
+1. VOLUMETRIC CONSTRUCTION: Render as a rigid 3D cabinet, not a flat rectangle. Z-Axis extrusion (depth) of 3-5 inches is mandatory. Show the 'return' planes (sides) of the cabinet—this proves it is a physical box.
+2. MATERIAL INTEGRITY (Weathering): The lightbox must inherit the environmental weathering of the host building. Apply 'grunge' layers: rust streaks on the aluminum edges, dust on the top surface, and uneven surface texture on the face. NO 'pristine plastic' finishes. The lightbox must look like it has been exposed to the elements for years.
+3. LIGHTING PHYSICS (Inverse-Square Falloff): The lightbox is a LIGHT SOURCE, not a flat glowing surface. It MUST cast an 'Inverse-Square Falloff' light wash onto the brick/stucco wall immediately behind and below it. The light must reflect off the building's texture (grout lines, brick relief). If the wall is dark, the light pool on the wall must be soft and diffuse.
+4. AMBIENT OCCLUSION (Shadows): Mandatory 'Contact Shadows': The back edge of the lightbox MUST cast a hard, sharp shadow where it touches the wall. This shadow indicates that the box has physical depth and is not 'floating' on the surface.
+
+CASE B (NAME ONLY):
+- Construct as EXTRUDED 3D CHANNEL LETTERFORM MESH
+- Each letter = separate 6-faced geometric primitive:
+  • Front face (letter-shaped polygon)
+  • 4 return planes (top/bottom/left/right side walls perpendicular to face)
+  • Back mounting face
+- Z-axis depth: 3.5 inches (89mm) measured perpendicular to wall plane
+- Typography: If font style specified (e.g., "Classic serif typeface similar to Trajan"), follow EXACT typographic direction
+- Color: If HEX specified (e.g., #1E3A8A), use EXACTLY as specified (non-negotiable client selection)
+
+CASE C (LOGO + NAME):
+- UNIFIED BRANDING LAYOUT combining Case A + Case B
+- Logo Component: 3D Cabinet Lightbox (Case A logic)
+- Name Component: Extruded Channel Letters (Case B logic)
+- Both at same Z-depth (3.5 inches) for visual consistency
+- Color Harmonization: Sample dominant HEX from logo, apply to name for unified brand identity
+- Layout: Horizontal (logo left, name right) OR Vertical (logo above, name below) based on golden zone aspect ratio
+
+═══════════════════════════════════════════════════════════════════════════
+ANTI-BOX AWNING PROTOCOL (OVERRIDES ALL 3D MESH LOGIC)
+═══════════════════════════════════════════════════════════════════════════
+
+When 'Awning' reference is selected, render: Fabric Awning Signage.
+
+1. SURFACE RECONSTRUCTION (Crucial): Wipe the golden area completely. Use the surrounding facade texture (brick/wood/stone) to patch the entire golden zone. The awning must then be rendered ON TOP of this restored wall surface. Zero border, zero frame, zero gaps.
+
+2. GEOMETRY: Create a curved fabric awning. ABSOLUTELY NO 3D BOXES, NO FLOATING CABINETS, NO METAL RETURNS. It is a single, soft, curved fabric mesh.
+
+3. GRAPHIC APPLICATION: Apply the [LOGO] and [TEXT] as a 2D flat ink print directly onto the canvas texture. The print must warp and distort perfectly to match the fabric's curves and wrinkles. There is NO 3D thickness to the lettering. The print looks painted or vinyl-applied into the fabric grain.
+
+4. LIGHTING: Use natural daylight only. NO glow, NO neon, NO artificial lighting effects.
+
+5. LAYOUT: Place the Logo on the left side and the Name on the right side. Ensure both flow with the awning's curve.
+
+FRAME STRUCTURE: Powder-coated aluminum frame with wall brackets and support arms extending from building. Fabric stretched over and attached to frame with tension curves visible.
+
+LIGHTING TECHNICAL SPECIFICATIONS (Ray-Traced):
+- Back-lit (Halo): RAY-TRACED BACKLIGHTING. Solid metal or acrylic faces with LED strips mounted on letter returns. Light projects against wall with INVERSE-SQUARE FALLOFF (physically accurate decay). NO face illumination. Light spill 6-12 inches beyond letter edges with wall-texture modulation (grout lines, stucco relief).
+- Front-lit: Translucent acrylic faces (1/4"-3/8" thick, IOR 1.49) with internal LED modules. Apply SUBSURFACE SCATTERING (2mm scattering radius) for internal light diffusion through volumetric acrylic. Edge-glow effect from light refracting at material boundaries.
+- Front & Back (Combined): Translucent faces with SUBSURFACE SCATTERING plus rear-mounted LED strips with INVERSE-SQUARE FALLOFF. Dual-mode ray-traced lighting.
+- No Light: Matte-finished brushed metal, painted aluminum, or high-density urethane (HDU). Rely on GEOMETRIC DEPTH (3.5-inch Z-axis protrusion) and RAY-CAST SHADOWS from sun position for visual impact.
+
+MOUNTING & HARDWARE (CRITICAL FOR REALISM):
+- Stand-off mounting: Visible aluminum or stainless steel studs/spacers (1-3 inches from wall). Creates shadow gap for dimensional effect.
+- Flush mounting: Direct attachment with concealed fasteners. Letters sit tight to wall surface.
+- Raceway mounting: Letters mounted to horizontal or vertical aluminum channel/wireway (painted to match or contrast). Conceals wiring.
+- Show mounting hardware realistically: stud locations, screw heads (if visible), raceway edges.
+
+PERSPECTIVE & PHYSICAL ACCURACY (Geometric Validation):
+1. PERSPECTIVE ALIGNMENT & PARALLAX: Letter face planes are PARALLEL to wall plane. Letter return planes (sides) are PERPENDICULAR to wall, extending along the wall's surface normal vector. If building facade recedes at angle θ from camera, all return planes maintain that θ recession, creating visible PARALLAX when viewed at oblique angles.
+2. AMBIENT OCCLUSION (Contact Shadows): Ray-cast contact shadows where sign geometry meets wall. 70% opacity at contact point (r=0), exponential decay with distance (r²). Prevents "pasted on" appearance. Include micro-shadows between letter returns and face edges.
+3. LIGHT INTERACTION (Wall Modulation): If back-lit, show INVERSE-SQUARE FALLOFF light wash on wall micro-geometry (grout lines depth, stucco relief topology). If front-lit, show SUBSURFACE SCATTERING edge-glow.
+4. DEPTH & DIMENSION (Multi-Plane Shadows): Letters cast TWO shadow types: (1) PRIMARY sharp shadow from face plane blocking direct sun, (2) SECONDARY graduated penumbra from 3.5-inch depth blocking ambient skylight. Shadow intensity varies by geometric depth.
+
+COLOR INTEGRITY:
+- LOGO PROVIDED (Image 2): Use exact HEX/Pantone colors from logo file. This is the brand's identity — color accuracy is non-negotiable.
+- TEXT ONLY WITH CLIENT COLOR: If the prompt specifies an exact color (e.g., "Letter color: #1E3A8A"), use that EXACT color on letter faces and returns. This is a client selection — color accuracy is non-negotiable.
+- TEXT ONLY WITHOUT CLIENT COLOR: If no specific color is provided, analyze building facade materials (brick color, mortar, stucco tone, glass tint, metal panels), time of day, and architectural style. Select letter finishes that complement: brushed aluminum (#A9A9A9), polished stainless steel (#C0C0C0), matte black (#1C1C1C), brushed bronze (#CD7F32), painted to match building accents.
+- NEVER use the golden guide color (#FFD740) as a sign color.
+
+REFERENCE IMAGES (if provided):
+- Additional images show TECHNICAL CONSTRUCTION EXAMPLES ONLY (mounting hardware, lighting installation, material finish, dimensional depth).
+- These are EDUCATIONAL REFERENCES for fabrication technique — do NOT replicate their specific design, layout, typography, or aesthetic.
+- Create an ORIGINAL design using the technical principles shown.
+
+FABRICATION REALISM (PBR Materials):
+- BRUSHED ALUMINUM (Returns/Sides): Metallic 0.95, Roughness 0.35, Anisotropy 0.6 (directional grain perpendicular to extrusion axis). Shows elongated ANISOTROPIC HIGHLIGHTS at grazing angles.
+- ACRYLIC (Translucent Faces): Transmission 0.7, IOR 1.49, Roughness 0.1. Apply SUBSURFACE SCATTERING with 2mm radius for internal glow. Edge thickness visible as subtle diffusion gradient.
+- PAINTED METAL: Base color (client HEX), Metallic 0.0, Roughness 0.4-0.6 (matte to satin). Subtle Fresnel edge brightening.
+- Letter returns (side walls) MUST BE VISIBLE to prove volumetric geometry. If viewing angle is ≥5° off-perpendicular, at least one return plane should show foreshortening.
+- For light boxes: show slight panel seams if cabinet >4 feet. Wiring conduit runs (subtle, realistic, bottom/side of raceway).
+
+OUTPUT: One ray-traced PBR render (16:9 aspect ratio) showing VOLUMETRIC GEOMETRIC STRUCTURES inserted into the golden zone cavity. The sign must exhibit measurable Z-depth: if processed by monocular depth-estimation algorithms, sign elements should show 3-4 inch elevation above wall plane. Letter return planes (sides) must be partially visible, proving true 3D mesh geometry with parallax. NO texture overlays, alpha blending, or 2D layer compositing. This is GEOMETRIC SCENE RECONSTRUCTION, not photo editing.
+
+VALIDATION CHECKLIST (All Required):
+1. SIDE-WALL TEST: At least one letter's return plane visible due to camera perspective angle (proves 3D extrusion).
+2. ZERO GOLD POLICY: No gold/yellow pixels (#FFD740 ±10%) remain visible. Original mask area either (a) covered by sign OR (b) restored to building facade texture.
+3. SURFACE CONTINUITY: If sign is smaller than golden zone, exposed wall areas show seamless texture restoration (brick/wood/stone pattern matches surrounding facade).
+4. SHADOW AUTHENTICITY: Multi-plane shadows (dark core + soft penumbra) prove geometric depth.
+
 `.trim()
 
 // ─── Gemini (Nano Banana) via generateContent ─────────────────────────────────
-// Model: gemini-2.0-flash-preview-image-generation
+// Model: gemini-2.5-flash-image (supported image generation)
 // Method: ai.models.generateContent with responseModalities: ["IMAGE"]
 //
-// Image slot layout (as parts):
-//   [0] text prompt
-//   [1] storefront photo       ← the scene to edit
-//   [2] brand logo / asset     ← incorporate on the sign face (optional)
-//   [3…N] reference style images ← sign style reference photos
+// Parts: text, marked storefront JPEG, optional logo.
 
 async function generateWithGemini(
-  params: GenerateImageParams
+  params: GenerateImageParams,
+  modelId: string,
+  resultProvider: GenerationProvider
 ): Promise<GenerateImageResult> {
   const { GoogleGenAI } = await import("@google/genai")
 
@@ -133,7 +298,6 @@ async function generateWithGemini(
     })
   }
 
-  // Images 3–N — reference sign style photos
   if (params.referenceStyleImages?.length) {
     for (const ref of params.referenceStyleImages.slice(0, 7)) {
       parts.push({
@@ -145,34 +309,99 @@ async function generateWithGemini(
     }
   }
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-image",
+  const { HarmCategory, HarmBlockThreshold } = await import("@google/genai")
+  const requestConfig = {
+    model: modelId,
     contents: [{ role: "user", parts }],
     config: {
       responseModalities: ["TEXT", "IMAGE"],
       systemInstruction: SIGN_SYSTEM_INSTRUCTION,
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+      ],
     },
-  })
+  }
 
-  // Find the image part in the response
-  for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p = part as any
-    if (p.inlineData?.data) {
-      return {
-        imageUrl: `data:${p.inlineData.mimeType ?? "image/png"};base64,${p.inlineData.data}`,
-        provider: "gemini",
+  // Exponential backoff retry logic for 503 UNAVAILABLE errors (high demand)
+  // Retry 1: Wait 2 seconds
+  // Retry 2: Wait 4 seconds  
+  // Retry 3: Wait 8 seconds
+  const maxRetries = 3
+  const baseDelay = 2000 // 2 seconds
+
+  let lastError: Error | null = null
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent(requestConfig)
+      
+      // Success - process response
+      for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = part as any
+        if (p.inlineData?.data) {
+          return {
+            imageUrl: `data:${p.inlineData.mimeType ?? "image/png"};base64,${p.inlineData.data}`,
+            provider: resultProvider,
+          }
+        }
       }
+
+      // No image in response
+      const block = response.candidates?.[0] as { finishReason?: string } | undefined
+      throw new Error(
+        `Gemini returned no image (${modelId}) — ${block?.finishReason ? `finish: ${block.finishReason}. ` : ""}` +
+          "Check API key, model access, quota, or region (some image models are restricted)."
+      )
+      
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      const errorMsg = lastError.message.toLowerCase()
+      
+      // Check if it's a retryable error (503, rate limit, timeout, unavailable)
+      // Specific detection for: {"error":{"code":503,"message":"This model is currently experiencing high demand..."}}
+      const isRetryable = 
+        errorMsg.includes("503") ||
+        errorMsg.includes("unavailable") ||
+        errorMsg.includes("high demand") ||
+        errorMsg.includes("experiencing high demand") ||
+        errorMsg.includes("rate limit") ||
+        errorMsg.includes("timeout") ||
+        errorMsg.includes("overloaded")
+      
+      if (!isRetryable || attempt === maxRetries) {
+        // Not retryable or out of retries - throw error
+        throw new Error(`Gemini request failed (${modelId}): ${lastError.message}`)
+      }
+      
+      // Exponential backoff: 2s, 4s, 8s
+      const delay = baseDelay * Math.pow(2, attempt)
+      console.log(`[Gemini] Attempt ${attempt + 1}/${maxRetries} failed. Error: ${errorMsg.slice(0, 100)}...`)
+      console.log(`[Gemini] Retrying in ${delay / 1000} seconds...`)
+      await new Promise(resolve => setTimeout(resolve, delay))
     }
   }
 
-  throw new Error("Gemini returned no image — check model availability and API key quota")
+  // Should never reach here, but TypeScript needs this
+  throw new Error(`Gemini request failed after ${maxRetries} retries: ${lastError?.message}`)
 }
 
 // ─── fal.ai — FLUX.1-fill (inpainting) ───────────────────────────────────────
-// Uses the storefront photo + a placement mask to edit ONLY the sign area.
-// White pixels in the mask = area to fill. Black pixels = keep unchanged.
-// Both image and mask are passed as base64 data URIs to guarantee dimension match.
 
 async function generateWithFal(
   params: GenerateImageParams
@@ -180,31 +409,35 @@ async function generateWithFal(
   const { fal } = await import("@fal-ai/client")
   fal.config({ credentials: process.env.FAL_KEY! })
 
-  // ── FLUX fill (inpainting) when storefront + placement are available ───────
-  if (params.storefrontFile && params.placement) {
-    const placement = params.placement
-
+  // ── FLUX fill (inpainting) using client-painted golden zone (same as Gemini) ──
+  if (params.storefrontFile && params.placementBrushPng) {
     // 1. Read the storefront into a buffer and detect its actual pixel dimensions
     const imageBuffer = Buffer.from(await params.storefrontFile.arrayBuffer())
     const { width: imgW, height: imgH } = getImageDimensions(imageBuffer)
 
-    // 2. Build the mask at the EXACT same dimensions as the storefront photo
-    const maskBuffer = buildMaskPng(imgW, imgH, placement)
-    const maskFile = new File([new Uint8Array(maskBuffer)], "mask.png", { type: "image/png" })
+    // 2. Use the same painted brush mask that Gemini sees (visual golden zone)
+    const sharp = (await import("sharp")).default
+    const fillRegionBuffer = await sharp(params.placementBrushPng)
+      .resize(imgW, imgH, { fit: "fill" })
+      .greyscale()
+      .png()
+      .toBuffer()
+    
+    const fillRegionFile = new File([new Uint8Array(fillRegionBuffer)], "fill-region.png", { type: "image/png" })
 
     // 3. Upload both to fal storage in parallel — guarantees URL-based access
     //    without request body size limits
-    const [imageUrl, maskUrl] = await Promise.all([
+    const [imageUrl, fillRegionUrl] = await Promise.all([
       fal.storage.upload(params.storefrontFile),
-      fal.storage.upload(maskFile),
+      fal.storage.upload(fillRegionFile),
     ])
 
-    // 4. Call SDXL Inpaint (free tier on fal.ai)
+    // 4. Call SDXL inpaint on fal.ai (API expects `mask_url` naming)
     const result = await fal.subscribe("fal-ai/inpaint", {
       input: {
         model_name:           "diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
         image_url:            imageUrl,
-        mask_url:             maskUrl,
+        mask_url:             fillRegionUrl,
         prompt:               params.prompt,
         negative_prompt:      params.negativePrompt ?? "",
         num_inference_steps:  30,
@@ -269,11 +502,7 @@ function getImageDimensions(buf: Buffer): { width: number; height: number } {
   return { width: 1024, height: 576 }
 }
 
-// ─── Mask PNG builder ─────────────────────────────────────────────────────────
-// Generates a minimal valid grayscale PNG with a white rectangle at the
-// placement bounding box and black everywhere else.
-
-function buildMaskPng(
+function buildInpaintRegionPng(
   W: number,
   H: number,
   placement: NonNullable<GenerateImageParams["placement"]>
@@ -364,8 +593,7 @@ function extractFalImageUrl(result: unknown): string | undefined {
 }
 
 // ─── Replicate — FLUX.1 Kontext Pro (instruction-based image editing) ─────────
-// No mask needed — the model understands natural language placement instructions.
-// Model: black-forest-labs/flux-kontext-pro ($0.04/image)
+// Model: black-forest-labs/flux-kontext-pro
 
 async function generateWithReplicate(
   params: GenerateImageParams

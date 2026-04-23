@@ -4,6 +4,9 @@ import "./globals.css"
 export const metadata: Metadata = {
   title: "Sign Generator — Kaykov Media",
   description: "Create realistic storefront sign mockups in minutes",
+  icons: {
+    icon: "/favicon.ico",
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

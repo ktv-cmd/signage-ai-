@@ -4,7 +4,7 @@ import { useFlowStore } from "@/lib/flow-store"
 import { cn } from "@/lib/utils"
 import type { VariationCount } from "@/types"
 
-const OPTIONS: { count: VariationCount; label: string; sublabel: string; recommended?: boolean }[] = [
+const OPTIONS: { count: VariationCount; label: string; sublabel: string }[] = [
   {
     count: 1,
     label: "1 design",
@@ -14,7 +14,6 @@ const OPTIONS: { count: VariationCount; label: string; sublabel: string; recomme
     count: 3,
     label: "3 designs",
     sublabel: "Three style-consistent variations — subtle depth, material, and edge differences",
-    recommended: true,
   },
   {
     count: 6,
@@ -36,7 +35,7 @@ export function StepVariations() {
       </div>
 
       <div className="space-y-3">
-        {OPTIONS.map(({ count, label, sublabel, recommended }) => (
+        {OPTIONS.map(({ count, label, sublabel }) => (
           <button
             key={count}
             type="button"
@@ -67,11 +66,6 @@ export function StepVariations() {
                   <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{sublabel}</p>
                 </div>
               </div>
-              {recommended && (
-                <span className="shrink-0 text-xs bg-black text-white px-2 py-0.5 rounded-full font-medium">
-                  Recommended
-                </span>
-              )}
             </div>
           </button>
         ))}

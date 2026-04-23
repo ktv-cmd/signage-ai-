@@ -10,25 +10,25 @@ import { StepSelect } from "./steps/step-select"
 import { StepAdjust } from "./steps/step-adjust"
 import { useRouter } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
+import Image from "next/image"
 
 const STEP_LABELS = {
   upload: "Upload",
   placement: "Placement",
   variations: "Variations",
   generate: "Generate",
-  select: "Select",
-  adjust: "Adjust",
+  select: "Download",
+  download: "Download",
+  adjust: "Download",
 }
 
 export function GenerateFlow() {
   const router = useRouter()
   const { currentStep, variationCount, goBack } = useFlowStore()
 
-  // Build visible steps (skip "select" if variationCount === 1)
-  const allSteps = ["upload", "placement", "variations", "generate", "select", "adjust"] as const
-  const visibleSteps = allSteps.filter(
-    (s) => !(s === "variations" || (s === "select" && variationCount === 1))
-  )
+  // Build visible steps (merged select + download into one step)
+  const allSteps = ["upload", "placement", "variations", "generate", "download"] as const
+  const visibleSteps = allSteps
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -50,9 +50,13 @@ export function GenerateFlow() {
             Back
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-black rounded flex items-center justify-center">
-              <span className="text-white text-xs font-bold">K</span>
-            </div>
+            <Image
+              src="/Logo Kaykov Media_C.PNG"
+              alt="Kaykov Media"
+              width={80}
+              height={28}
+              className="object-contain brightness-0"
+            />
             <span className="font-semibold text-sm text-gray-900">Sign Generator</span>
           </div>
           <div className="w-16" />
@@ -66,11 +70,12 @@ export function GenerateFlow() {
       </header>
 
       {/* Step content */}
-      <main className="max-w-3xl mx-auto px-6 py-10">
+      <main className="max-w-5xl mx-auto px-6 py-10">
         {currentStep === "upload" && <StepUpload />}
         {currentStep === "placement" && <StepPlacement />}
         {currentStep === "variations" && <StepVariations />}
         {currentStep === "generate" && <StepGenerate />}
+        {currentStep === "download" && <StepSelect />}
         {currentStep === "select" && <StepSelect />}
         {currentStep === "adjust" && <StepAdjust />}
       </main>

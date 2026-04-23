@@ -3,7 +3,7 @@
  * Uses Gemini (nana banana) if key is available; otherwise deterministic local logic.
  */
 
-import type { ReferenceStyle, VariantSpec, VariationCount } from "@/types"
+import type { ReferenceStyle, VariantSpec, VariationCount, FontStyle, TextStyling } from "@/types"
 
 // Controlled variation axes — bounded, not random
 const DEPTH_PROFILES = ["flat", "shallow", "medium", "deep"] as const
@@ -16,12 +16,23 @@ export async function planVariations(
   references: ReferenceStyle[],
   variationCount: VariationCount,
   brandText: string,
-  brandMode: BrandMode = "text-only"
+  brandMode: BrandMode = "text-only",
+  textStyling?: TextStyling
 ): Promise<VariantSpec[]> {
   const primary = references[0]
 
   // Always use the local deterministic planner to preserve Gemini quota for image generation.
-  return planDeterministic(primary, variationCount, brandText, brandMode)
+  return planDeterministic(primary, variationCount, brandText, brandMode, textStyling)
+}
+
+// Font style descriptions for prompts
+function getFontDescription(fontStyle?: FontStyle): string {
+  const fontMap: Record<FontStyle, string> = {
+    "modern-sans": "Modern sans-serif typeface (geometric, clean lines, contemporary feel). Similar to Futura, Avant Garde, or Gotham.",
+    "classic-serif": "Classic serif typeface (traditional, elegant, timeless). Similar to Trajan, Times Roman, or Garamond. Well-proportioned with refined serifs.",
+    "bold-condensed": "Bold condensed sans-serif (industrial, impactful, space-efficient). Similar to Impact, Univers Condensed, or Trade Gothic Bold. Tight letter spacing, strong presence.",
+  }
+  return fontStyle ? fontMap[fontStyle] : "Professional signage typeface appropriate for the selected style"
 }
 
 // ─── Gemini planner ───────────────────────────────────────────────────────────
@@ -77,8 +88,48 @@ function planDeterministic(
   reference: ReferenceStyle,
   count: VariationCount,
   brandText: string,
-  brandMode: BrandMode = "text-only"
+  brandMode: BrandMode = "text-only",
+  textStyling?: TextStyling
 ): VariantSpec[] {
+  // ═══════════════════════════════════════════════════════════════
+  // SAFETY VALIDATION RULES
+  // ═══════════════════════════════════════════════════════════════
+  
+  // 1. NEON CHECK: Neon is forbidden - overwrite to "No-lit"
+  if (reference.lightingType === "neon" || reference.compatibleLightModes.includes("neon" as any)) {
+    console.warn('[SAFETY] Neon lighting detected - overriding to no-light mode')
+    reference = {
+      ...reference,
+      lightingType: "front",
+      compatibleLightModes: ["front"]
+    }
+  }
+  
+  // 2. COLOR VALIDATION: Ensure valid color with fallback
+  const finalColor = textStyling?.color || "#C0C0C0" // Default: brushed silver (most common)
+  const validatedTextStyling: TextStyling = {
+    fontStyle: textStyling?.fontStyle || "modern-sans",
+    color: finalColor
+  }
+  
+  // 3. AWNING OVERRIDE: Awnings MUST be internally lit (no external lights)
+  const isAwning = reference.id === "awning"
+  if (isAwning) {
+    console.log('[SAFETY] Awning detected - forcing internal/natural lighting mode')
+    reference = {
+      ...reference,
+      lightingType: "front", // Internal glow (will be overridden in prompt to natural light)
+      compatibleLightModes: ["front"] // Single mode for awnings
+    }
+  }
+  
+  // 4. LOGO ASSET CHECK: Use validated styling
+  const effectiveTextStyling = brandMode === "text-only" || brandMode === "logo-and-text" 
+    ? validatedTextStyling 
+    : undefined
+  
+  // ═══════════════════════════════════════════════════════════════
+  
   const specs: VariantSpec[] = []
 
   const depthMatrix = {
@@ -112,7 +163,16 @@ function planDeterministic(
       hasBackingPlate: i % 3 === 2 ? !reference.hasBackingPlate : reference.hasBackingPlate,
       materialFeel: reference.materialFeel,
       lightingMode: lightMode,
-      prompt: buildPrompt({ brandText, reference, depth, edge, mount, lightMode, brandMode }),
+      prompt: buildPrompt({ 
+        brandText, 
+        reference, 
+        depth, 
+        edge, 
+        mount, 
+        lightMode, 
+        brandMode, 
+        textStyling: effectiveTextStyling // Use validated styling
+      }),
     })
   }
 
@@ -125,6 +185,7 @@ function buildPrompt({
   mount,
   lightMode,
   brandMode,
+  textStyling,
 }: {
   brandText: string
   reference: ReferenceStyle
@@ -133,66 +194,158 @@ function buildPrompt({
   mount: string
   lightMode: string
   brandMode: BrandMode
+  textStyling?: TextStyling
 }): string {
-
-  // ── Mounting description ──────────────────────────────────────────────────
-  const mountMap: Record<string, string> = {
-    "flush":     "flush-mounted directly against the facade surface",
-    "stand-off": "stand-off mounted with visible metal studs creating a floating shadow gap between letters and wall",
-    "raceway":   "raceway-mounted on a metal wireway box fixed to the facade",
+  const isAwning = reference.id === "awning"
+  const isLightBox = reference.id === "light-box"
+  
+  // Get descriptive parts
+  const signType = getSignTypeDescription(isAwning, isLightBox)
+  const fontDesc = getFontStyleDescription(textStyling?.fontStyle)
+  const colorDesc = getColorDescription(textStyling?.color, brandMode)
+  const lightDesc = getLightingDescription(lightMode, isAwning)
+  const mountDesc = getMountingDescription(mount)
+  
+  // Build the content description based on brand mode
+  const contentDesc = brandMode === "logo-only"
+    ? `the logo from Image 2`
+    : brandMode === "text-only"
+    ? `the text '${brandText}'`
+    : `the logo from Image 2 alongside the text '${brandText}'`
+  
+  // Awning special case - with specific color rules per brand mode
+  if (isAwning) {
+    const awningColorDesc = getAwningColorDescription(brandMode, textStyling?.color)
+    
+    return [
+      `Generate a photorealistic architectural photo of the storefront.`,
+      `Inside the area marked by the yellow highlight, place a new, professional fabric awning that clearly displays ${contentDesc}.`,
+      ``,
+      `The awning must be made of heavyweight canvas fabric with natural draping and visible texture.`,
+      `The graphics should appear screen-printed or vinyl-applied onto the fabric surface, following the curves of the material.`,
+      ``,
+      awningColorDesc,
+      ``,
+      `The awning must be properly anchored to the building with a visible metal frame—do not let it float.`,
+      `Use natural daylight only—no artificial glow or internal illumination.`,
+      `Completely replace the yellow highlighted area with this new awning, restoring any visible wall texture around it.`,
+    ].filter(Boolean).join(" ")
   }
-  const mountDesc = mountMap[mount] ?? `${mount}-mounted`
-
-  // ── Lighting description ──────────────────────────────────────────────────
-  const lightMap: Record<string, string> = {
-    front: "internally LED front-lit, even face illumination with soft light spill onto surrounding facade",
-    back:  "LED halo backlit, glowing halo between letters and wall surface",
-    both:  "dual LED lit — bright face illumination combined with a rear halo glow",
-    neon:  "exposed neon tube lighting with vivid colored light and characteristic glass glow",
+  
+  // Light box special case
+  if (isLightBox) {
+    return [
+      `Generate a photorealistic architectural photo of the storefront.`,
+      `Inside the area marked by the yellow highlight, place a new, high-end illuminated light box sign that clearly displays ${contentDesc}.`,
+      ``,
+      `The sign must be a sleek aluminum cabinet with a translucent acrylic face panel.`,
+      colorDesc,
+      `The cabinet should have visible depth with crisp edges and internal LED illumination creating an even, soft glow.`,
+      ``,
+      `Ensure the sign is physically mounted to the wall with visible brackets—do not let it float.`,
+      `The sign must cast realistic shadows and integrate seamlessly with the building's architecture.`,
+      `Completely replace the yellow highlighted area with this new signage, restoring the wall texture around it.`,
+    ].filter(Boolean).join(" ")
   }
-  const lightDesc = lightMap[lightMode] ?? `${lightMode} illuminated`
-
-  // ── Backing plate ─────────────────────────────────────────────────────────
-  const backingDesc = reference.hasBackingPlate
-    ? "mounted on a rectangular backing panel that frames the sign cleanly against the wall"
-    : "individual elements mounted directly onto the facade with no backing panel"
-
-  // ── Brand content — adapts to what the client provided ───────────────────
-  let brandContent: string
-  if (brandMode === "logo-only") {
-    brandContent =
-      `BRAND CONTENT — LOGO ONLY: The client provided a logo image (see attached image). ` +
-      `Place the logo INSIDE the bounding box as the sole sign face content. ` +
-      `Reproduce the logo exactly — same colors, same shapes, same proportions — scaled to fill the sign area. ` +
-      `No brand name text, no extra typography. The logo alone is the entire sign content. ` +
-      `Use the logo's exact colors for the sign face, letters, and illuminated elements.`
-  } else if (brandMode === "text-only") {
-    brandContent =
-      `BRAND CONTENT — TEXT ONLY: No logo was provided. ` +
-      `Display the brand name "${brandText}" as the sign face using clean premium commercial typography. ` +
-      `Style the lettering to match the reference sign's aesthetic and material. ` +
-      `Choose letter colors that match the reference sign's color palette.`
-  } else {
-    brandContent =
-      `BRAND CONTENT — LOGO AND NAME: The client provided both a logo image and the brand name "${brandText}". ` +
-      `Place the logo as the PRIMARY and DOMINANT element of the sign face inside the bounding box — larger, centered or prominently positioned. ` +
-      `Add the brand name "${brandText}" as secondary text below or alongside the logo, in typography matching the reference sign style. ` +
-      `Use the logo's exact colors for both the logo and the text. ` +
-      `The logo must be visually dominant — significantly larger than the text.`
-  }
-
-  // ── Final prompt ──────────────────────────────────────────────────────────
+  
+  // Channel letters (default) - clean, direct prompt
   return [
-    `TASK: Replace the existing sign or storefront element in the marked bounding box with a new professionally manufactured sign.`,
+    `Generate a photorealistic architectural photo of the storefront.`,
+    `Inside the area marked by the yellow highlight, place a new, high-end ${signType} sign that clearly reads ${contentDesc}.`,
+    ``,
+    `The sign must be dimensional, 3D channel letters${fontDesc}.`,
+    colorDesc,
+    `The sign must have ${lightDesc}.`,
+    ``,
+    `Ensure the new signage is physically ${mountDesc}—do not let it float.`,
+    `The text must be sharp, legible, and integrated into the building's facade.`,
+    `Completely replace the yellow highlighted area with this new signage, restoring the wall texture around it.`,
+  ].filter(Boolean).join(" ")
+}
 
-    brandContent,
+// ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
 
-    `SIGN STYLE: The reference sign photo is your visual blueprint — match its material, dimensional depth, mounting style, and overall aesthetic exactly. Style: ${reference.name}. Mounting: ${mountDesc}. ${backingDesc}.`,
+function getSignTypeDescription(isAwning: boolean, isLightBox: boolean): string {
+  if (isAwning) return "fabric awning"
+  if (isLightBox) return "illuminated cabinet"
+  return "channel letter"
+}
 
-    `ILLUMINATION: Use the reference photo as the lighting guide — replicate the exact illumination type (front-lit, halo backlight, neon, or unlit), the same light color and temperature, the same glow intensity, and the same light spill onto the wall. ${lightDesc}.`,
+function getFontStyleDescription(fontStyle?: FontStyle): string {
+  const fontMap: Record<FontStyle, string> = {
+    "modern-sans": " with a modern, clean sans-serif font",
+    "classic-serif": " with an elegant, classic serif font",
+    "bold-condensed": " with a bold, condensed industrial font",
+  }
+  return fontStyle ? fontMap[fontStyle] : " with a professional, modern font"
+}
 
-    `REPLACEMENT RULE: Whatever is currently in the bounding box must be completely removed and replaced. The new sign fills the entire bounding box, anchored to the facade with correct perspective and mounting hardware.`,
+function getColorDescription(color?: string, brandMode?: BrandMode): string {
+  if (brandMode === "logo-only") {
+    return "The colors must match exactly the logo provided in Image 2."
+  }
+  if (color) {
+    return `The letters should be ${color}.`
+  }
+  return "The letters should complement the building's color palette—brushed aluminum, matte black, or bronze."
+}
 
-    `PHOTO PRESERVATION — CRITICAL: Every pixel outside the bounding box must be identical to the original photo — same exact colors, same white balance, same exposure, same contrast, same color temperature. Zero color grading, zero tone adjustment, zero enhancement of any kind outside the sign area.`,
+function getLightingDescription(lightMode: string, isAwning: boolean): string {
+  if (isAwning) {
+    return "natural daylight illumination only"
+  }
+  
+  const lightMap: Record<string, string> = {
+    front: "front-lit illumination (glowing letter faces)",
+    back: "back-lit illumination (halo glow behind the letters)",
+    both: "front and back-lit illumination",
+    neon: "no artificial illumination (natural shadows only)",
+  }
+  
+  return lightMap[lightMode] ?? "professional illumination"
+}
+
+function getMountingDescription(mount: string): string {
+  const mountMap: Record<string, string> = {
+    flush: "mounted flush to the wall with visible brackets",
+    "stand-off": "mounted to the wall with visible stand-off pins",
+    raceway: "mounted on a visible raceway rail",
+  }
+  
+  return mountMap[mount] ?? "mounted to the wall with visible brackets"
+}
+
+// ─── AWNING COLOR RULES ──────────────────────────────────────────────────────
+// Text-only: Awning fabric = user's selected color, Text = white/neutral
+// Logo-only: Awning fabric = color that matches/complements the logo
+// Logo+Text: Same as logo-only (awning matches logo, text in neutral)
+
+function getAwningColorDescription(brandMode: BrandMode, userColor?: string): string {
+  if (brandMode === "text-only") {
+    // AWNING + NAME ONLY: Awning in selected color, text in white/neutral
+    const awningColor = userColor || "a rich, professional color that complements the building"
+    return [
+      `AWNING COLOR: The awning fabric must be ${awningColor}.`,
+      `TEXT COLOR: The business name text must be white or cream—a clean, neutral color that stands out clearly against the colored awning fabric.`,
+      `The contrast between the colored awning and white text should be sharp and highly legible.`,
+    ].join(" ")
+  }
+  
+  if (brandMode === "logo-only") {
+    // AWNING + LOGO ONLY: Awning color matches/complements the logo
+    return [
+      `AWNING COLOR: Analyze the logo in Image 2 and choose an awning fabric color that complements and harmonizes with the logo's color palette.`,
+      `The awning should feel like a natural extension of the brand—pick a color from the logo or a complementary shade that looks professional and cohesive.`,
+      `LOGO COLORS: The logo must retain its exact original colors from Image 2.`,
+    ].join(" ")
+  }
+  
+  // AWNING + LOGO + TEXT: Same as logo-only (awning matches logo)
+  return [
+    `AWNING COLOR: Analyze the logo in Image 2 and choose an awning fabric color that complements and harmonizes with the logo's color palette.`,
+    `The awning should feel like a natural extension of the brand—pick a color from the logo or a complementary shade that looks professional and cohesive.`,
+    `LOGO COLORS: The logo must retain its exact original colors from Image 2.`,
+    `TEXT COLOR: The business name text should be white or cream—a clean, neutral color that contrasts well with the awning and complements the logo.`,
   ].join(" ")
 }
+

@@ -70,7 +70,14 @@ export interface GenerationResult {
 }
 
 // Flow state machine
-export type FlowStep = "upload" | "placement" | "variations" | "generate" | "select" | "adjust"
+export type FlowStep = "upload" | "placement" | "variations" | "generate" | "select" | "download" | "adjust"
+
+export type FontStyle = "modern-sans" | "classic-serif" | "bold-condensed"
+
+export interface TextStyling {
+  fontStyle: FontStyle
+  color: string  // hex color
+}
 
 export interface FlowState {
   currentStep: FlowStep
@@ -79,8 +86,10 @@ export interface FlowState {
   brandAssetFile?: File
   brandAssetPreviewUrl?: string
   brandText?: string
+  textStyling?: TextStyling
   selectedReferences: ReferenceStyle[]
   placement?: Placement
+  placementBrushFile?: File
   variationCount?: VariationCount
   /** Model id from /api/providers; matches GenerationProvider in lib/ai/provider. */
   selectedProvider?: GenerationProvider

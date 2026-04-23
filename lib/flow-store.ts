@@ -2,7 +2,7 @@
 
 import { create } from "zustand"
 import type { GenerationProvider } from "@/lib/ai/provider"
-import type { FlowState, FlowStep, ReferenceStyle, Placement, VariationCount, GenerationResult, AdjustmentSettings } from "@/types"
+import type { FlowState, FlowStep, ReferenceStyle, Placement, VariationCount, GenerationResult, AdjustmentSettings, TextStyling } from "@/types"
 
 interface FlowStore extends FlowState {
   // Step navigation
@@ -14,12 +14,14 @@ interface FlowStore extends FlowState {
   setStorefront: (file: File, previewUrl: string) => void
   setBrandAsset: (file: File, previewUrl: string) => void
   setBrandText: (text: string) => void
+  setTextStyling: (styling: TextStyling) => void
   clearBrandAsset: () => void
   setSelectedReferences: (refs: ReferenceStyle[]) => void
-  toggleReference: (ref: ReferenceStyle) => void
+  selectReference: (ref: ReferenceStyle) => void
 
   // Step 2: Placement
   setPlacement: (placement: Placement) => void
+  setPlacementBrushFile: (file: File | undefined) => void
 
   // Step 3: Variations
   setVariationCount: (count: VariationCount) => void
@@ -40,7 +42,7 @@ interface FlowStore extends FlowState {
   reset: () => void
 }
 
-const STEP_ORDER: FlowStep[] = ["upload", "placement", "variations", "generate", "select", "adjust"]
+const STEP_ORDER: FlowStep[] = ["upload", "placement", "variations", "generate", "download"]
 
 const DEFAULT_ADJUSTMENTS: AdjustmentSettings = {
   faceColor: "#C0C0C0",
@@ -77,14 +79,14 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     const currentIndex = STEP_ORDER.indexOf(currentStep)
     let nextStep = STEP_ORDER[currentIndex + 1]
 
-    // Skip variations step only — placement is active.
+    // Enable variations step — users can choose output count
     if (currentStep === "placement") {
-      nextStep = "generate"
+      nextStep = "variations"
     }
 
-    // Skip "select" step if variationCount === 1
-    if (nextStep === "select" && variationCount === 1) {
-      nextStep = "adjust"
+    // Always go to download page (merged select + download)
+    if (nextStep === "select") {
+      nextStep = "download"
     }
 
     if (nextStep) set({ currentStep: nextStep })
@@ -95,13 +97,13 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     const currentIndex = STEP_ORDER.indexOf(currentStep)
     let previousStep = STEP_ORDER[currentIndex - 1]
 
-    // Skip variations step only — placement is active.
+    // Enable variations step — users can choose output count
     if (currentStep === "generate") {
-      previousStep = "placement"
+      previousStep = "variations"
     }
 
-    // Skip hidden "select" step when variationCount is 1.
-    if (previousStep === "select" && variationCount === 1) {
+    // Skip back from download to generate
+    if (previousStep === "select") {
       previousStep = "generate"
     }
 
@@ -114,25 +116,28 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
   setBrandAsset: (file, previewUrl) =>
     set({ brandAssetFile: file, brandAssetPreviewUrl: previewUrl }),
 
-  setBrandText: (text) =>
-    set({ brandText: text }),
+  setBrandText: (text) => {
+    const state = get()
+    set({ 
+      brandText: text,
+      // Auto-initialize textStyling with defaults when brandText is set (text-only mode)
+      textStyling: state.textStyling || { fontStyle: "modern-sans", color: "#C0C0C0" }
+    })
+  },
+
+  setTextStyling: (textStyling) =>
+    set({ textStyling }),
 
   clearBrandAsset: () =>
     set({ brandAssetFile: undefined, brandAssetPreviewUrl: undefined }),
 
   setSelectedReferences: (refs) => set({ selectedReferences: refs }),
 
-  toggleReference: (ref) => {
-    const current = get().selectedReferences
-    const exists = current.some((r) => r.id === ref.id)
-    if (exists) {
-      set({ selectedReferences: current.filter((r) => r.id !== ref.id) })
-    } else {
-      set({ selectedReferences: [...current, ref] })
-    }
-  },
+  selectReference: (ref) => set({ selectedReferences: [ref] }),
 
   setPlacement: (placement) => set({ placement }),
+
+  setPlacementBrushFile: (placementBrushFile) => set({ placementBrushFile }),
 
   setVariationCount: (variationCount) => set({ variationCount }),
 
