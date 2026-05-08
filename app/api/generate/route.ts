@@ -9,6 +9,16 @@ function isGeminiProvider(p: string | null | undefined): p is "gemini" | "gemini
   return p === "gemini" || p === "gemini-2.5"
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
@@ -24,23 +34,23 @@ export async function POST(req: NextRequest) {
     const variationCountRaw = formData.get("variationCount") as string | null
 
     if (!storefrontFile) {
-      return NextResponse.json({ error: "Storefront image is required" }, { status: 400 })
+      return NextResponse.json({ error: "Storefront image is required" }, { status: 400, headers: CORS_HEADERS })
     }
     if (!brandText && !brandAssetFile) {
-      return NextResponse.json({ error: "Brand asset or text is required" }, { status: 400 })
+      return NextResponse.json({ error: "Brand asset or text is required" }, { status: 400, headers: CORS_HEADERS })
     }
     if (!referencesRaw) {
-      return NextResponse.json({ error: "At least one reference style is required" }, { status: 400 })
+      return NextResponse.json({ error: "At least one reference style is required" }, { status: 400, headers: CORS_HEADERS })
     }
     if (!variationCountRaw) {
-      return NextResponse.json({ error: "Variation count is required" }, { status: 400 })
+      return NextResponse.json({ error: "Variation count is required" }, { status: 400, headers: CORS_HEADERS })
     }
 
     const placementBrushFile = formData.get("placementBrush") as File | null
     if (!placementBrushFile || placementBrushFile.size === 0) {
       return NextResponse.json(
         { error: "Paint where the sign should go on the building, then continue." },
-        { status: 400 }
+        { status: 400, headers: CORS_HEADERS }
       )
     }
     const placementBrushBuffer = Buffer.from(await placementBrushFile.arrayBuffer())
@@ -63,10 +73,10 @@ export async function POST(req: NextRequest) {
       rawProvider === "fal-grok" || rawProvider === "fal-flux-kontext" ? "fal" : rawProvider
 
     if (![1, 3, 6].includes(variationCount)) {
-      return NextResponse.json({ error: "variationCount must be 1, 3, or 6" }, { status: 400 })
+      return NextResponse.json({ error: "variationCount must be 1, 3, or 6" }, { status: 400, headers: CORS_HEADERS })
     }
     if (!references.length) {
-      return NextResponse.json({ error: "At least one reference is required" }, { status: 400 })
+      return NextResponse.json({ error: "At least one reference is required" }, { status: 400, headers: CORS_HEADERS })
     }
 
     // ─── Resolve brand text and mode ────────────────────────────────────────
@@ -226,12 +236,12 @@ export async function POST(req: NextRequest) {
       },
     }
 
-    return NextResponse.json(response)
+    return NextResponse.json(response, { headers: CORS_HEADERS })
   } catch (err) {
     console.error("[generate] Error:", err)
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Generation failed" },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     )
   }
 }

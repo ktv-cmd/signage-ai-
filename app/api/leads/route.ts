@@ -15,6 +15,16 @@ function getResend() {
   return new Resend(key)
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, PATCH, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
 // ─── POST /api/leads ──────────────────────────────────────────────────────────
 // Called when user submits the contact form (before generation).
 // Saves lead + uploads storefront/logo to Supabase Storage.
@@ -32,7 +42,7 @@ export async function POST(req: NextRequest) {
     const logoFile       = formData.get("logo")       as File | null
 
     if (!name || !email) {
-      return NextResponse.json({ error: "Name and email are required" }, { status: 400 })
+      return NextResponse.json({ error: "Name and email are required" }, { status: 400, headers: CORS_HEADERS })
     }
 
     const supabase = getSupabase()
@@ -95,10 +105,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, id: leadId })
+    return NextResponse.json({ ok: true, id: leadId }, { headers: CORS_HEADERS })
   } catch (err) {
     console.error("[leads] POST error:", err)
-    return NextResponse.json({ error: "Failed to save lead" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to save lead" }, { status: 500, headers: CORS_HEADERS })
   }
 }
 
@@ -120,7 +130,7 @@ export async function PATCH(req: NextRequest) {
     const { id, name, email, phone, company, generatedImageUrl } = body
 
     if (!id) {
-      return NextResponse.json({ error: "Lead ID required" }, { status: 400 })
+      return NextResponse.json({ error: "Lead ID required" }, { status: 400, headers: CORS_HEADERS })
     }
 
     const supabase = getSupabase()
@@ -199,9 +209,9 @@ export async function PATCH(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true }, { headers: CORS_HEADERS })
   } catch (err) {
     console.error("[leads] PATCH error:", err)
-    return NextResponse.json({ error: "Failed to update lead" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to update lead" }, { status: 500, headers: CORS_HEADERS })
   }
 }
