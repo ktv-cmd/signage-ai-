@@ -124,7 +124,12 @@ export async function PATCH(req: NextRequest) {
       email: string
       phone?: string
       company?: string
-      generatedImageUrl?: string  // data: URL or remote URL
+      generatedImageUrl?: string
+      sign_width_in?: number | null
+      sign_height_in?: number | null
+      size_method?: string | null
+      door_detected?: boolean | null
+      door_confidence?: number | null
     }
 
     const { id, name, email, phone, company, generatedImageUrl } = body
@@ -173,40 +178,106 @@ export async function PATCH(req: NextRequest) {
         .eq("id", id)
     }
 
+    // ── Fetch full lead for email ─────────────────────────────────────────────
+    let leadData: { name: string; email: string; phone: string | null; company: string | null; storefront_url: string | null; logo_url: string | null } | null = null
+    if (supabase) {
+      const { data } = await supabase.from("leads").select("name,email,phone,company,storefront_url,logo_url").eq("id", id).single()
+      if (data) leadData = data
+    }
+    const resolvedName    = leadData?.name    ?? name
+    const resolvedEmail   = leadData?.email   ?? email
+    const resolvedPhone   = leadData?.phone   ?? phone ?? null
+    const resolvedCompany = leadData?.company ?? company ?? null
+    const storefrontUrl   = leadData?.storefront_url ?? null
+    const logoUrl         = leadData?.logo_url ?? null
+
+    const fmt = (val: string | null | undefined, fallback = "—") => val?.trim() || fallback
+
+    const hasSize = body.sign_width_in != null && body.sign_height_in != null
+
     // ── Send email notification ───────────────────────────────────────────────
     const notifyEmail = process.env.LEAD_NOTIFICATION_EMAIL
+    const submittedAt = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+
     if (resend && notifyEmail) {
-      const subject = `New Sign AI Lead — ${company || name}`
-      const submittedAt = new Date().toLocaleString("en-US", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
+      const adminHtml = `
+<div style="font-family:sans-serif;max-width:620px;margin:0 auto;color:#111">
+  <h2 style="margin-bottom:4px">New Design Signage Lead</h2>
+  <p style="color:#666;margin-top:0;font-size:13px">${submittedAt}</p>
 
-      const html = `
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-          <h2 style="margin-bottom:4px">New Sign AI Lead</h2>
-          <p style="color:#666;margin-top:0">${submittedAt}</p>
-          <table style="border-collapse:collapse;width:100%;margin-top:16px">
-            <tr><td style="padding:8px 0;color:#666;width:100px">Name</td><td style="padding:8px 0;font-weight:600">${name}</td></tr>
-            <tr><td style="padding:8px 0;color:#666">Email</td><td style="padding:8px 0;font-weight:600">${email}</td></tr>
-            ${phone ? `<tr><td style="padding:8px 0;color:#666">Phone</td><td style="padding:8px 0;font-weight:600">${phone}</td></tr>` : ""}
-            ${company ? `<tr><td style="padding:8px 0;color:#666">Company</td><td style="padding:8px 0;font-weight:600">${company}</td></tr>` : ""}
-          </table>
-          ${generatedStoredUrl ? `
-          <div style="margin-top:24px">
-            <p style="color:#666;margin-bottom:8px">Generated Sign Mockup</p>
-            <img src="${generatedStoredUrl}" alt="Generated sign" style="width:100%;border-radius:8px" />
-            <a href="${generatedStoredUrl}" style="display:inline-block;margin-top:8px;color:#000;font-size:13px">View full image →</a>
-          </div>` : ""}
-        </div>
-      `
+  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Client Info</h3>
+  <table style="border-collapse:collapse;width:100%">
+    <tr><td style="padding:6px 0;color:#666;width:140px;font-size:14px">Name</td><td style="padding:6px 0;font-weight:600;font-size:14px">${fmt(resolvedName)}</td></tr>
+    <tr><td style="padding:6px 0;color:#666;font-size:14px">Email</td><td style="padding:6px 0;font-weight:600;font-size:14px">${resolvedEmail ? `<a href="mailto:${resolvedEmail}" style="color:#111">${resolvedEmail}</a>` : "—"}</td></tr>
+    ${resolvedPhone ? `<tr><td style="padding:6px 0;color:#666;font-size:14px">Phone</td><td style="padding:6px 0;font-weight:600;font-size:14px"><a href="tel:${resolvedPhone}" style="color:#111">${resolvedPhone}</a></td></tr>` : ""}
+    ${resolvedCompany ? `<tr><td style="padding:6px 0;color:#666;font-size:14px">Company</td><td style="padding:6px 0;font-weight:600;font-size:14px">${resolvedCompany}</td></tr>` : ""}
+  </table>
 
-      await resend.emails.send({
-        from: "Sign AI <onboarding@resend.dev>",
-        to: notifyEmail,
-        subject,
-        html,
-      })
+  ${hasSize ? `
+  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Sign Size</h3>
+  <p style="margin:0;font-size:15px;font-weight:600">${body.sign_width_in}" × ${body.sign_height_in}"</p>` : ""}
+
+  ${generatedStoredUrl ? `
+  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Generated Mockup</h3>
+  <a href="${generatedStoredUrl}"><img src="${generatedStoredUrl}" alt="Generated sign mockup" style="width:100%;border-radius:8px;display:block" /></a>
+  <a href="${generatedStoredUrl}" style="display:inline-block;margin-top:6px;color:#555;font-size:13px">View full image →</a>` : ""}
+
+  ${storefrontUrl || logoUrl ? `
+  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Original Photos</h3>
+  ${storefrontUrl ? `<p style="margin:4px 0;font-size:14px">Storefront: <a href="${storefrontUrl}" style="color:#111">View →</a></p>` : ""}
+  ${logoUrl ? `<p style="margin:4px 0;font-size:14px">Logo: <a href="${logoUrl}" style="color:#111">View →</a></p>` : ""}` : ""}
+</div>`
+
+      const adminSendResult = await resend.emails.send({
+        from: "Kaykov Media <info@kaykovmedia.com>",
+        to: ["ktv@kaykovmedia.com", "boris@kaykovmedia.com"],
+        subject: `New Design Signage Lead — ${resolvedCompany || resolvedName}`,
+        html: adminHtml,
+      }).catch(console.error)
+
+      if (adminSendResult && supabase) {
+        await supabase.from("leads").update({ admin_email_sent_at: new Date().toISOString() }).eq("id", id)
+      }
+    }
+
+    if (resend && resolvedEmail) {
+      const KM_LOGO = "https://signscompanynewyork.com/favicon.png"
+      const clientHtml = `
+<div style="font-family:sans-serif;max-width:620px;margin:0 auto;color:#111">
+  <div style="text-align:center;padding:24px 0 16px">
+    <img src="${KM_LOGO}" alt="Kaykov Media" style="width:80px;height:80px" />
+  </div>
+
+  <p style="font-size:16px;margin-bottom:4px">Hi ${fmt(resolvedName)},</p>
+  <p style="font-size:15px;color:#333;margin-top:0">Thank you for using Kaykov Media. Your sign design is ready and we will contact you shortly with a full quote.</p>
+
+  ${generatedStoredUrl ? `
+  <div style="margin-top:20px">
+    <img src="${generatedStoredUrl}" alt="Your sign design" style="width:100%;border-radius:8px;display:block" />
+  </div>` : ""}
+
+  ${hasSize ? `<p style="margin-top:12px;font-size:15px;font-weight:600">Estimated size: ${body.sign_width_in}" × ${body.sign_height_in}"</p>` : ""}
+
+  <p style="margin-top:24px;font-size:14px;color:#333">Best regards,</p>
+  <div style="margin-top:32px;padding-top:24px;border-top:1px solid #eee">
+    <img src="${KM_LOGO}" alt="Kaykov Media" style="width:60px;height:60px;display:block;margin-bottom:12px" />
+    <p style="margin:0;font-size:14px;font-weight:600">Boris</p>
+    <p style="margin:4px 0 0;font-size:13px;color:#666">Kaykov Media</p>
+    <p style="margin:2px 0 0;font-size:13px;color:#666"><a href="tel:+17184784200" style="color:#666">(718) 478-4200</a></p>
+    <p style="margin:2px 0 0;font-size:13px;color:#666"><a href="https://signscompanynewyork.com" style="color:#666">signscompanynewyork.com</a></p>
+  </div>
+</div>`
+
+      const clientSendResult = await resend.emails.send({
+        from: "Kaykov Media <info@kaykovmedia.com>",
+        to: resolvedEmail,
+        subject: "Your sign design is ready!",
+        html: clientHtml,
+      }).catch(console.error)
+
+      if (clientSendResult && supabase) {
+        await supabase.from("leads").update({ client_email_sent_at: new Date().toISOString() }).eq("id", id)
+      }
     }
 
     return NextResponse.json({ ok: true }, { headers: CORS_HEADERS })
