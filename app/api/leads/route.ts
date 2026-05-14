@@ -178,10 +178,10 @@ export async function PATCH(req: NextRequest) {
         .eq("id", id)
     }
 
-    // ── Fetch full lead for email ─────────────────────────────────────────────
-    let leadData: { name: string; email: string; phone: string | null; company: string | null; storefront_url: string | null; logo_url: string | null } | null = null
+    // ── Fetch ALL lead data from DB as single source of truth ────────────────
+    let leadData: { name: string; email: string; phone: string | null; company: string | null; storefront_url: string | null; logo_url: string | null; generated_url: string | null; sign_width_in: number | null; sign_height_in: number | null } | null = null
     if (supabase) {
-      const { data } = await supabase.from("leads").select("name,email,phone,company,storefront_url,logo_url").eq("id", id).single()
+      const { data } = await supabase.from("leads").select("name,email,phone,company,storefront_url,logo_url,generated_url,sign_width_in,sign_height_in").eq("id", id).single()
       if (data) leadData = data
     }
     const resolvedName    = leadData?.name    ?? name
@@ -190,10 +190,11 @@ export async function PATCH(req: NextRequest) {
     const resolvedCompany = leadData?.company ?? company ?? null
     const storefrontUrl   = leadData?.storefront_url ?? null
     const logoUrl         = leadData?.logo_url ?? null
+    const generatedUrl    = leadData?.generated_url ?? null
 
     const fmt = (val: string | null | undefined, fallback = "—") => val?.trim() || fallback
 
-    const hasSize = body.sign_width_in != null && body.sign_height_in != null
+    const hasSize = leadData?.sign_width_in != null && leadData?.sign_height_in != null
 
     // ── Send email notification ───────────────────────────────────────────────
     const notifyEmail = process.env.LEAD_NOTIFICATION_EMAIL
@@ -215,12 +216,12 @@ export async function PATCH(req: NextRequest) {
 
   ${hasSize ? `
   <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Sign Size</h3>
-  <p style="margin:0;font-size:15px;font-weight:600">${body.sign_width_in}" × ${body.sign_height_in}"</p>` : ""}
+  <p style="margin:0;font-size:15px;font-weight:600">${leadData?.sign_width_in}" × ${leadData?.sign_height_in}"</p>` : ""}
 
-  ${generatedStoredUrl ? `
+  ${generatedUrl ? `
   <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Generated Mockup</h3>
-  <a href="${generatedStoredUrl}"><img src="${generatedStoredUrl}" alt="Generated sign mockup" style="width:100%;border-radius:8px;display:block" /></a>
-  <a href="${generatedStoredUrl}" style="display:inline-block;margin-top:6px;color:#555;font-size:13px">View full image →</a>` : ""}
+  <a href="${generatedUrl}"><img src="${generatedUrl}" alt="Generated sign mockup" style="width:100%;border-radius:8px;display:block" /></a>
+  <a href="${generatedUrl}" style="display:inline-block;margin-top:6px;color:#555;font-size:13px">View full image →</a>` : ""}
 
   ${storefrontUrl ? `
   <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Storefront Photo</h3>
@@ -248,15 +249,15 @@ export async function PATCH(req: NextRequest) {
     if (resend && resolvedEmail) {
       const clientHtml = `
 <div style="font-family:sans-serif;max-width:620px;margin:0 auto;color:#111">
-  ${generatedStoredUrl ? `
+  ${generatedUrl ? `
   <div style="margin-top:0">
-    <img src="${generatedStoredUrl}" alt="Your sign design" style="width:100%;border-radius:8px;display:block" />
+    <img src="${generatedUrl}" alt="Your sign design" style="width:100%;border-radius:8px;display:block" />
   </div>` : ""}
 
   <p style="font-size:16px;margin-bottom:4px;margin-top:24px">Hi ${fmt(resolvedName)},</p>
   <p style="font-size:15px;color:#333;margin-top:0">Thank you for using Kaykov Media. Your sign design is ready and we will contact you shortly with a full quote.</p>
 
-  ${hasSize ? `<p style="margin-top:12px;font-size:15px;font-weight:600">Estimated size: ${body.sign_width_in}" × ${body.sign_height_in}"</p>` : ""}
+  ${hasSize ? `<p style="margin-top:12px;font-size:15px;font-weight:600">Estimated size: ${leadData?.sign_width_in}" × ${leadData?.sign_height_in}"</p>` : ""}
 
   ${storefrontUrl ? `
   <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Your Storefront</h3>
