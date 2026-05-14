@@ -222,10 +222,15 @@ export async function PATCH(req: NextRequest) {
   <a href="${generatedStoredUrl}"><img src="${generatedStoredUrl}" alt="Generated sign mockup" style="width:100%;border-radius:8px;display:block" /></a>
   <a href="${generatedStoredUrl}" style="display:inline-block;margin-top:6px;color:#555;font-size:13px">View full image →</a>` : ""}
 
-  ${storefrontUrl || logoUrl ? `
-  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Original Photos</h3>
-  ${storefrontUrl ? `<p style="margin:4px 0;font-size:14px">Storefront: <a href="${storefrontUrl}" style="color:#111">View →</a></p>` : ""}
-  ${logoUrl ? `<p style="margin:4px 0;font-size:14px">Logo: <a href="${logoUrl}" style="color:#111">View →</a></p>` : ""}` : ""}
+  ${storefrontUrl ? `
+  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Storefront Photo</h3>
+  <a href="${storefrontUrl}"><img src="${storefrontUrl}" alt="Storefront" style="width:100%;border-radius:8px;display:block" /></a>
+  ` : ""}
+
+  ${logoUrl ? `
+  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Client Logo</h3>
+  <a href="${logoUrl}"><img src="${logoUrl}" alt="Client logo" style="max-width:300px;border-radius:8px;display:block" /></a>
+  ` : ""}
 </div>`
 
       const adminSendResult = await resend.emails.send({
@@ -252,6 +257,16 @@ export async function PATCH(req: NextRequest) {
   <p style="font-size:15px;color:#333;margin-top:0">Thank you for using Kaykov Media. Your sign design is ready and we will contact you shortly with a full quote.</p>
 
   ${hasSize ? `<p style="margin-top:12px;font-size:15px;font-weight:600">Estimated size: ${body.sign_width_in}" × ${body.sign_height_in}"</p>` : ""}
+
+  ${storefrontUrl ? `
+  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Your Storefront</h3>
+  <img src="${storefrontUrl}" alt="Storefront" style="width:100%;border-radius:8px;display:block" />
+  ` : ""}
+
+  ${logoUrl ? `
+  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#888">Your Logo</h3>
+  <img src="${logoUrl}" alt="Logo" style="max-width:300px;border-radius:8px;display:block" />
+  ` : ""}
 
   <p style="margin-top:24px;font-size:14px;color:#333">Best regards,</p>
   <div style="margin-top:32px;padding-top:24px;border-top:1px solid #eee">
