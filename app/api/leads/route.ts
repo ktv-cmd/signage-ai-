@@ -241,26 +241,20 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (resend && resolvedEmail) {
-      const KM_LOGO = "https://signscompanynewyork.com/favicon.png"
       const clientHtml = `
 <div style="font-family:sans-serif;max-width:620px;margin:0 auto;color:#111">
-  <div style="text-align:center;padding:24px 0 16px">
-    <img src="${KM_LOGO}" alt="Kaykov Media" style="width:80px;height:80px" />
-  </div>
-
-  <p style="font-size:16px;margin-bottom:4px">Hi ${fmt(resolvedName)},</p>
-  <p style="font-size:15px;color:#333;margin-top:0">Thank you for using Kaykov Media. Your sign design is ready and we will contact you shortly with a full quote.</p>
-
   ${generatedStoredUrl ? `
-  <div style="margin-top:20px">
+  <div style="margin-top:0">
     <img src="${generatedStoredUrl}" alt="Your sign design" style="width:100%;border-radius:8px;display:block" />
   </div>` : ""}
+
+  <p style="font-size:16px;margin-bottom:4px;margin-top:24px">Hi ${fmt(resolvedName)},</p>
+  <p style="font-size:15px;color:#333;margin-top:0">Thank you for using Kaykov Media. Your sign design is ready and we will contact you shortly with a full quote.</p>
 
   ${hasSize ? `<p style="margin-top:12px;font-size:15px;font-weight:600">Estimated size: ${body.sign_width_in}" × ${body.sign_height_in}"</p>` : ""}
 
   <p style="margin-top:24px;font-size:14px;color:#333">Best regards,</p>
   <div style="margin-top:32px;padding-top:24px;border-top:1px solid #eee">
-    <img src="${KM_LOGO}" alt="Kaykov Media" style="width:60px;height:60px;display:block;margin-bottom:12px" />
     <p style="margin:0;font-size:14px;font-weight:600">Boris</p>
     <p style="margin:4px 0 0;font-size:13px;color:#666">Kaykov Media</p>
     <p style="margin:2px 0 0;font-size:13px;color:#666"><a href="tel:+17184784200" style="color:#666">(718) 478-4200</a></p>
